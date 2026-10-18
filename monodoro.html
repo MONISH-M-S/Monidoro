@@ -101,13 +101,18 @@
   const TEST_MODE = params.has("focusSec") || params.has("breakSec");
   const RING_LENGTH = 2 * Math.PI * 120;
 
+  // Pause between one session ending and the next starting by itself.
+  const AUTO_START_DELAY = 1500;
+
   let mode = "focus";
   let total = FOCUS;
   let left = FOCUS;
   let running = false;
   let timerId = null;
   let endAt = 0;
+  let autoId = null;
   let completed = 0;
+  let audioCtx = null;
 
   const el = {
     time: document.getElementById("time"),
@@ -139,6 +144,56 @@
     document.title = (running ? text + " - " : "") + "Monodoro";
   }
 
+  // Browsers block audio until the user interacts with the page, so the
+  // context is created and resumed on the first click rather than at chime
+  // time - otherwise the sound is silently blocked.
+  function ensureAudio() {
+    try {
+      if (!audioCtx) {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) return;
+        audioCtx = new AudioCtor();
+      }
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    } catch (err) {
+      audioCtx = null;
+    }
+  }
+
+  // Synthesised two-note chime, so the file needs no audio assets and
+  // still works offline.
+  function chime() {
+    if (!audioCtx) return;
+    try {
+      const now = audioCtx.currentTime;
+      [880, 1318.5].forEach(function (freq, index) {
+        const startAt = now + index * 0.16;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.22, startAt + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.45);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(startAt);
+        osc.stop(startAt + 0.5);
+      });
+    } catch (err) {
+      // Audio is a nicety - never let it break the timer.
+    }
+  }
+
+  // A pending auto-start must be cancellable, otherwise pressing Reset
+  // leaves a timer running that starts a session behind your back.
+  function cancelAuto() {
+    if (autoId !== null) {
+      clearTimeout(autoId);
+      autoId = null;
+    }
+  }
+
   // Recompute the remaining time from the clock instead of counting ticks,
   // so the countdown cannot drift even when the interval fires late.
   function tick() {
@@ -151,6 +206,7 @@
 
   function finish() {
     stop();
+    chime();
     if (mode === "focus") {
       completed += 1;
       mode = "break";
@@ -161,10 +217,16 @@
     }
     left = total;
     render();
+    autoId = setTimeout(function () {
+      autoId = null;
+      start();
+    }, AUTO_START_DELAY);
   }
 
   function start() {
+    cancelAuto();
     if (running) return;
+    ensureAudio();
     running = true;
     endAt = Date.now() + left * 1000;
     timerId = setInterval(tick, 250);
@@ -183,6 +245,7 @@
   }
 
   function reset() {
+    cancelAuto();
     stop();
     mode = "focus";
     total = FOCUS;
