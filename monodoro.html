@@ -70,6 +70,12 @@
   button:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
   button:disabled{opacity:.35; cursor:not-allowed}
   #go{background:var(--accent); border-color:var(--accent); color:var(--bg)}
+  .skip{
+    display:block; width:100%; margin:10px 0 0; padding:9px 14px;
+    font-size:.78rem; color:var(--mut);
+    background:transparent; border-style:dashed;
+  }
+  .skip[hidden]{display:none}
 
   .panels{margin-top:24px}
   .panel-buttons{display:flex; gap:8px}
@@ -184,6 +190,7 @@
     <button id="go">Start</button>
     <button id="reset">Reset</button>
   </div>
+  <button type="button" class="skip" id="skip" hidden>Skip break</button>
 
   <section class="panels">
     <div class="panel-buttons">
@@ -491,6 +498,7 @@
     cycles: document.getElementById("cycles"),
     go: document.getElementById("go"),
     reset: document.getElementById("reset"),
+    skip: document.getElementById("skip"),
     count: document.getElementById("count"),
     badge: document.getElementById("badge"),
     notice: document.getElementById("notice"),
@@ -555,6 +563,7 @@
     document.body.classList.toggle("is-break", mode === "break");
     document.body.classList.toggle("is-longbreak", mode === "longbreak");
     document.title = (running ? text + " - " : "") + "Monodoro";
+    el.skip.hidden = mode === "focus";
     renderCycles();
   }
 
@@ -733,11 +742,26 @@
     render();
   }
 
-  // Wired here, immediately after the two functions, rather than in a distant
-  // listeners block - an earlier full-file rewrite dropped these two lines and
-  // silently killed both buttons.
+  // Ending a break early is a normal part of the technique - sometimes the
+  // rest is simply not needed. It never counts as a completed focus session,
+  // and skipping a long break still closes the set.
+  function skipBreak() {
+    if (mode === "focus") return;
+    cancelAuto();
+    stop();
+    if (mode === "longbreak") cycleCount = 0;
+    mode = "focus";
+    total = settings.focusSec;
+    left = settings.focusSec;
+    render();
+  }
+
+  // Wired immediately after the functions they call. A previous full-file
+  // rewrite dropped these lines and silently killed both buttons, so they stay
+  // next to the code from now on.
   el.go.addEventListener("click", toggle);
   el.reset.addEventListener("click", reset);
+  el.skip.addEventListener("click", skipBreak);
 
   /* ---------- sound picker ---------- */
 
