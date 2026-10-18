@@ -88,6 +88,7 @@
   let left = FOCUS;
   let running = false;
   let timerId = null;
+  let endAt = 0;
   let completed = 0;
 
   const el = {
@@ -118,15 +119,14 @@
     document.title = (running ? text + " - " : "") + "Focus Timer";
   }
 
+  // Recompute the remaining time from the clock instead of counting ticks,
+  // so the countdown cannot drift even when the interval fires late.
   function tick() {
-    left -= 1;
-    if (left <= 0) {
-      left = 0;
-      render();
-      finish();
-      return;
-    }
+    const remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+    if (remaining === left) return;
+    left = remaining;
     render();
+    if (left === 0) finish();
   }
 
   function finish() {
@@ -146,7 +146,8 @@
   function start() {
     if (running) return;
     running = true;
-    timerId = setInterval(tick, 1000);
+    endAt = Date.now() + left * 1000;
+    timerId = setInterval(tick, 250);
     render();
   }
 
