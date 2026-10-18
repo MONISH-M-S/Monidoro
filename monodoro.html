@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Monodoro</title>
+<title>Monidoro</title>
 <style>
   :root{
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
@@ -206,7 +206,7 @@
 </head>
 <body>
 <main>
-  <h1>Monodoro</h1>
+  <h1>Monidoro</h1>
   <p class="badge" id="badge" hidden>test mode</p>
   <p class="greeting" id="greeting" hidden></p>
 
@@ -475,7 +475,7 @@
   const store = (function () {
     let backing = null;
     try {
-      const probe = "__monodoro_probe__";
+      const probe = "__monidoro_probe__";
       window.localStorage.setItem(probe, "1");
       window.localStorage.removeItem(probe);
       backing = window.localStorage;
@@ -511,10 +511,33 @@
     };
   })();
 
-  const STORE_SETTINGS = "monodoro.settings";
-  const STORE_SOUND_LEGACY = "monodoro.sound";
-  const STORE_COMPLETED = "monodoro.completed";
-  const STORE_DAYS = "monodoro.days";
+  const STORE_SETTINGS = "monidoro.settings";
+  const STORE_COMPLETED = "monidoro.completed";
+  const STORE_DAYS = "monidoro.days";
+
+  // Two older key layouts are still readable, so renaming the app did not throw
+  // anyone's history away:
+  //   - everything used to be written under "monodoro.*"
+  //   - the sound choice used to live in a key of its own
+  //
+  // Nothing is ever written under the old names again, and they are left in
+  // place rather than deleted: silently destroying a user's data during an
+  // upgrade is a far worse sin than leaving two stale keys behind.
+  const RENAMED_FROM = {
+    "monidoro.settings": "monodoro.settings",
+    "monidoro.completed": "monodoro.completed",
+    "monidoro.days": "monodoro.days"
+  };
+  const LEGACY_SOUND_KEY = "monodoro.sound";
+
+  // Read the current key, falling back to its pre-rename name. Values migrate
+  // forward on their own, because the next save always writes the new key.
+  function readStored(key) {
+    const value = store.get(key);
+    if (value !== null) return value;
+    const previous = RENAMED_FROM[key];
+    return previous ? store.get(previous) : null;
+  }
 
   const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -524,7 +547,7 @@
   }
 
   function loadCount() {
-    return sanitizeCount(store.get(STORE_COMPLETED));
+    return sanitizeCount(readStored(STORE_COMPLETED));
   }
 
   // Settings may be missing, corrupt, hand-edited, or written by an older
@@ -539,7 +562,7 @@
       : {};
 
     // Migration: the sound used to live under its own key.
-    const legacySound = store.get(STORE_SOUND_LEGACY);
+    const legacySound = store.get(LEGACY_SOUND_KEY);
     const sound = SOUND_KEYS.indexOf(source.sound) >= 0
       ? source.sound
       : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
@@ -579,7 +602,7 @@
   function loadSettings() {
     let parsed = null;
     try {
-      parsed = JSON.parse(store.get(STORE_SETTINGS) || "null");
+      parsed = JSON.parse(readStored(STORE_SETTINGS) || "null");
     } catch (err) {
       parsed = null;
     }
@@ -613,7 +636,7 @@
   }
 
   function loadDays() {
-    const stored = store.get(STORE_DAYS);
+    const stored = readStored(STORE_DAYS);
     if (!stored) return {};
     try {
       return sanitizeDays(JSON.parse(stored));
@@ -729,7 +752,7 @@
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
     document.body.classList.toggle("is-longbreak", mode === "longbreak");
-    document.title = (running ? text + " - " : "") + "Monodoro";
+    document.title = (running ? text + " - " : "") + "Monidoro";
     el.skip.hidden = mode === "focus";
     renderCycles();
   }
@@ -1357,7 +1380,7 @@
 
   function buildBackup() {
     return {
-      app: "monodoro",
+      app: "monidoro",
       version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
       completed: completed,
@@ -1378,7 +1401,7 @@
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = "monodoro-backup-" + dateKey() + ".json";
+      link.download = "monidoro-backup-" + dateKey() + ".json";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1449,7 +1472,7 @@
 
       const result = applyBackup(parsed);
       if (!result) {
-        showDataStatus("That file is not a Monodoro backup.", "err");
+        showDataStatus("That file is not a Monidoro backup.", "err");
         return;
       }
 
@@ -1531,7 +1554,7 @@
       "app from a web address instead of a file fixes this.";
     el.notice.hidden = false;
     console.warn(
-      "Monodoro: persistent storage is unavailable here, so progress will " +
+      "Monidoro: persistent storage is unavailable here, so progress will " +
       "reset when the page reloads."
     );
   }

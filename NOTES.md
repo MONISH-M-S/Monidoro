@@ -1,4 +1,4 @@
-# Monodoro — working notes and handoff
+# Monidoro — working notes and handoff
 
 > **Picking this up in a fresh session?** Read this file, then skim
 > `monodoro.html`, then run `git log --oneline`. Then just say
@@ -36,12 +36,29 @@ and pushed.
 
 ## Storage keys (localStorage)
 
+The app was originally called **Monodoro**; it is now **Monidoro**. The keys
+were renamed with it, but the old names are still *read* so the rename did not
+erase anyone's history.
+
 | Key | Shape |
 |---|---|
-| `monodoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, name}` |
-| `monodoro.completed` | total focus sessions ever, as a string number |
-| `monodoro.days` | `{"YYYY-MM-DD": {sessions, seconds}}` |
-| `monodoro.sound` | **legacy** — migrated into settings on load |
+| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, name}` |
+| `monidoro.completed` | total focus sessions ever, as a string number |
+| `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds}}` |
+
+Older layouts still readable, never written again:
+
+| Legacy key | Why it exists |
+|---|---|
+| `monodoro.settings` / `.completed` / `.days` | pre-rename names, read via `readStored()` |
+| `monodoro.sound` | the sound choice used to live in a key of its own |
+
+The old keys are left in place rather than deleted — silently destroying user
+data during an upgrade is worse than leaving stale keys behind. `readStored()`
+prefers the new key and falls back to the old one, and values migrate forward
+on their own because the next save writes the new key. **An old backup file
+(`app: "monodoro"`) still imports**, because `applyBackup()` deliberately does
+not validate the `app` field.
 
 Two rules that must not be broken:
 
@@ -123,6 +140,13 @@ focusing and dies if you bail early.
 
 7. `renderCalendar()` builds the grid with `innerHTML`. That is safe *only*
    because every interpolated value is a number. Do not add user text to it.
+
+8. **A rename must never drop data.** Renaming the app meant renaming the
+   storage keys, which would have looked to every existing user like a total
+   wipe. `readStored()` reads the new key first and falls back to the old one,
+   so nothing is lost and everything migrates forward on the next save. Any
+   future rename of a key must repeat this, and the old key must be *read*, not
+   deleted.
 
 ## How features were verified
 
