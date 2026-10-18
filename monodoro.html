@@ -68,8 +68,11 @@
     background:var(--accent); border-color:var(--accent); color:var(--bg);
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
-  footer{margin-top:26px; font-size:.8rem; color:var(--mut)}
-  footer b{color:var(--ink)}
+  .stats{
+    margin-top:26px; padding-top:18px; border-top:1px solid var(--line);
+    font-size:.8rem; color:var(--mut); line-height:1.7;
+  }
+  .stats b{color:var(--ink)}
   .notice{
     margin:14px 0 0; padding:9px 12px; border-radius:8px;
     border:1px solid var(--warn); color:var(--warn);
@@ -110,7 +113,11 @@
     <p class="hint">Tap a sound to hear it and set it as your alert</p>
   </div>
 
-  <footer>Completed sessions: <b id="count">0</b></footer>
+  <div class="stats">
+    <div>Today: <b id="todaySessions">0</b> sessions &middot; <b id="todayMinutes">0</b> min</div>
+    <div>All time: <b id="count">0</b> sessions</div>
+  </div>
+
   <p class="notice" id="notice" hidden></p>
 </main>
 
@@ -134,6 +141,24 @@
   const AUTO_START_DELAY = 1500;
   const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
   const DEFAULT_SOUND = "chiptune";
+
+  /* ---------- helpers ---------- */
+
+  // Local date, NOT toISOString(): that returns UTC, which files an 11pm
+  // session under the next day for anyone east of Greenwich.
+  function dateKey(date) {
+    const d = date || new Date();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + month + "-" + day;
+  }
+
+  // Rounds to whole minutes, but never shows "0 min" for real work.
+  function formatMinutes(seconds) {
+    if (!(seconds > 0)) return "0";
+    const minutes = Math.round(seconds / 60);
+    return minutes < 1 ? "<1" : String(minutes);
+  }
 
   /* ---------- storage ---------- */
 
@@ -182,6 +207,7 @@
 
   const STORE_COMPLETED = "monodoro.completed";
   const STORE_SOUND = "monodoro.sound";
+  const STORE_DAYS = "monodoro.days";
 
   function loadCount() {
     const value = Number(store.get(STORE_COMPLETED));
@@ -191,6 +217,21 @@
   function loadSound() {
     const value = store.get(STORE_SOUND);
     return SOUND_KEYS.indexOf(value) >= 0 ? value : DEFAULT_SOUND;
+  }
+
+  // Never trust stored JSON - it can be corrupt, hand-edited, or from an
+  // older version of the app. Anything unexpected becomes an empty history
+  // rather than a broken page.
+  function loadDays() {
+    const raw = store.get(STORE_DAYS);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return parsed;
+    } catch (err) {
+      return {};
+    }
   }
 
   /* ---------- state ---------- */
@@ -203,6 +244,7 @@
   let endAt = 0;
   let autoId = null;
   let completed = loadCount();
+  let days = loadDays();
   let audioCtx = null;
   let selectedSound = loadSound();
 
@@ -214,7 +256,9 @@
     reset: document.getElementById("reset"),
     count: document.getElementById("count"),
     badge: document.getElementById("badge"),
-    notice: document.getElementById("notice")
+    notice: document.getElementById("notice"),
+    todaySessions: document.getElementById("todaySessions"),
+    todayMinutes: document.getElementById("todayMinutes")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
@@ -235,6 +279,33 @@
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
     document.title = (running ? text + " - " : "") + "Monodoro";
+  }
+
+  function todayEntry() {
+    const entry = days[dateKey()];
+    if (entry && typeof entry === "object") {
+      return {
+        sessions: Number(entry.sessions) || 0,
+        seconds: Number(entry.seconds) || 0
+      };
+    }
+    return { sessions: 0, seconds: 0 };
+  }
+
+  function renderStats() {
+    const today = todayEntry();
+    el.todaySessions.textContent = today.sessions;
+    el.todayMinutes.textContent = formatMinutes(today.seconds);
+    el.count.textContent = completed;
+  }
+
+  function recordFocusSession(seconds) {
+    const key = dateKey();
+    const entry = todayEntry();
+    entry.sessions += 1;
+    entry.seconds += seconds;
+    days[key] = entry;
+    store.set(STORE_DAYS, JSON.stringify(days));
   }
 
   /* ---------- audio ---------- */
@@ -336,6 +407,8 @@
     if (mode === "focus") {
       completed += 1;
       store.set(STORE_COMPLETED, String(completed));
+      recordFocusSession(FOCUS);
+      renderStats();
       mode = "break";
       total = BREAK;
     } else {
@@ -411,6 +484,7 @@
 
   renderSoundChoice();
   render();
+  renderStats();
 
   // Tell the user up front when saving is impossible, rather than letting
   // them discover it by losing a session.
