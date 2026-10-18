@@ -40,6 +40,8 @@ and pushed.
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
 - Theme: system / light / dark, plus an accent colour picker
+- Tags per session: chip row on the main screen, editable in Customize, with a
+  per-tag breakdown of every day and a tag filter in the history heatmap
 
 ## Storage keys (localStorage)
 
@@ -49,9 +51,28 @@ erase anyone's history.
 
 | Key | Shape |
 |---|---|
-| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, name}` |
+| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, name, tags, activeTag}` |
 | `monidoro.completed` | total focus sessions ever, as a string number |
-| `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds}}` |
+| `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds, byTag?}}` |
+
+`settings.tags` is `[{id, name, color}]` — `id` is a lowercase slug built
+internally and never derived from the name, so renaming a tag cannot orphan the
+history filed under it. `byTag` is `{tagId: {sessions, seconds}}` and is
+**omitted entirely** when empty, so days recorded before tags existed keep the
+shape they already had. There is no migration pass and reading old history never
+rewrites it.
+
+Three tagging rules worth keeping:
+
+- A session is filed under the tag selected when it **started** (`sessionTag`),
+  not when it finished, so switching chips mid-session cannot rewrite where the
+  session belongs.
+- Untagged sessions count towards the day total but sit in **no** `byTag`
+  bucket. A heatmap filtered to a tag therefore shows older, untagged days as
+  empty — honest rather than wrong.
+- Removing a tag never touches recorded time and never rewrites history. It only
+  drops the breakdown, which is why removal warns only when there is a breakdown
+  to lose, and why a tag id is generated internally and never reused.
 
 Older layouts still readable, never written again:
 
@@ -77,35 +98,23 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-### 7. Tags per session (the data migration)
-
-Agreed design, not yet built:
-
-- `settings.tags`: `[{id, name, color}]`, defaults Study / Work / Life,
-  manageable from the Customize panel.
-- An active tag is chosen on the main screen as a chip row.
-- `days[key]` gains `byTag: {tagId: {sessions, seconds}}`.
-- **Old days without `byTag` must be treated as untagged, not rewritten on
-  load.** Never migrate by writing on read.
-- The heatmap gets a tag filter and/or a colour-by-tag mode.
-
-This is the only change that alters the shape of saved data. Export/import was
-built first specifically so a backup exists before this lands.
-
-### 8. Ambient focus noise + volume
+### 7. Ambient focus noise + volume
 
 Rain / brown noise / cafe hum, synthesised through Web Audio so there are still
 zero asset files. Volume slider. Start and stop with the focus session.
 
-### 9. Keyboard shortcuts + notification
+### 8. Keyboard shortcuts + notification
 
 - `Space` = start / pause, `R` = reset.
 - A desktop notification when time is up.
 - **Test the Notification API on `file://` before promising it works.** A file
   page has an opaque origin and the permission prompt may not appear at all.
   It is expected to work fine on GitHub Pages, if that ever happens.
+- Note the existing `keydown` listener that closes the calendar on `Escape`;
+  shortcuts must not fire while a text field has focus, or typing a name would
+  start and stop the timer.
 
-### 10. Confetti + tree
+### 9. Confetti + tree
 
 A CSS-only celebration on completion, and a Forest-style tree that grows while
 focusing and dies if you bail early.
@@ -145,8 +154,13 @@ focusing and dies if you bail early.
    time through `Date` via `shiftDay()`, so month ends, year ends and leap days
    are handled for free. Tested against Feb 29 2028 and Feb 28 → Mar 1 2027.
 
-7. `renderCalendar()` builds the grid with `innerHTML`. That is safe *only*
-   because every interpolated value is a number. Do not add user text to it.
+7. **User text and markup.** `renderCalendar()` builds the grid with
+   `innerHTML`, and since tags exist it now interpolates a tag name into the day
+   tooltip, escaped with `escapeHtml()`. Anything else added there must be a
+   number or escaped. The tag chips take the opposite approach deliberately:
+   `createElement` plus `textContent`, never markup, because a tag name is user
+   text. Verified with the name `" ><img src=x>`, which renders as plain text
+   and injects nothing.
 
 8. **A rename must never drop data.** Renaming the app meant renaming the
    storage keys, which would have looked to every existing user like a total

@@ -92,6 +92,30 @@
   }
   .skip[hidden]{display:none}
 
+  /* ---------- tags ---------- */
+
+  .tags{
+    display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:16px;
+  }
+  .tags[hidden]{display:none}
+  .tag-chip{
+    min-width:0; padding:5px 12px; font-size:.74rem; border-radius:999px;
+    display:inline-flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid var(--line); color:var(--mut);
+  }
+  /* The dot both names the tag and previews its colour. Its fallback is
+     transparent so the "no tag" chip shows no dot at all. */
+  .tag-chip::before{
+    content:""; width:8px; height:8px; border-radius:50%;
+    background:var(--tag, transparent); border:1px solid var(--tag, var(--mut));
+  }
+  .tag-chip[data-tag=""]::before, .tag-chip[data-cal-tag=""]::before{display:none}
+  .tag-chip[aria-pressed="true"]{
+    background:var(--tag, var(--accent)); border-color:var(--tag, var(--accent));
+    color:var(--bg);
+  }
+  .tag-chip[aria-pressed="true"]::before{border-color:var(--bg); background:var(--bg)}
+
   .panels{margin-top:24px}
   .panel-buttons{display:flex; gap:8px}
   .panel-buttons button{
@@ -134,6 +158,25 @@
   .hint[data-state="ok"]{color:var(--accent)}
   .hint[data-state="err"]{color:var(--warn)}
   #eraseBtn{color:var(--warn)}
+
+  .tag-list{display:flex; flex-direction:column; gap:7px; margin-bottom:9px}
+  .tag-edit{display:flex; align-items:center; gap:7px}
+  /* These buttons live inside .field, whose `input` rule sets width:100%, so
+     the name field needs the extra specificity to stay flexible in the row. */
+  .tag-edit .tag-name{
+    flex:1 1 auto; min-width:0; width:auto; padding:7px 10px;
+    font:inherit; font-size:.84rem; border-radius:8px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  }
+  .tag-color{
+    flex:0 0 30px; min-width:0; height:30px; padding:0;
+    border-radius:8px; background:var(--tag); border-color:var(--line);
+  }
+  .tag-remove{
+    flex:0 0 30px; min-width:0; height:30px; padding:0;
+    font-size:1rem; line-height:1; color:var(--warn);
+    background:transparent; border-color:var(--line);
+  }
 
   .stats{
     margin-top:26px; padding-top:18px; border-top:1px solid var(--line);
@@ -202,6 +245,12 @@
     margin-top:14px; font-size:.62rem; color:var(--mut);
   }
   .cal-legend i{width:12px; height:12px; border-radius:4px; display:block}
+
+  .cal-tags{
+    display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin-top:14px;
+  }
+  .cal-tags[hidden]{display:none}
+  .cal-tags .tag-chip{padding:4px 9px; font-size:.66rem}
 </style>
 </head>
 <body>
@@ -226,6 +275,7 @@
     <button id="go">Start</button>
     <button id="reset">Reset</button>
   </div>
+  <div class="tags" id="tagRow" role="group" aria-label="Tag for the next session" hidden></div>
   <button type="button" class="skip" id="skip" hidden>Skip break</button>
 
   <section class="panels">
@@ -308,6 +358,18 @@
       </label>
 
       <div class="field">
+        <span class="field-label">Tags</span>
+        <div class="tag-list" id="tagList"></div>
+        <div class="btn-row">
+          <button type="button" id="addTagBtn">Add tag</button>
+        </div>
+        <p class="hint">
+          Tagging is optional. Click a colour to change it. Removing a tag keeps
+          all of your time; it only loses the breakdown by that tag.
+        </p>
+      </div>
+
+      <div class="field">
         <span class="field-label">Your data</span>
         <div class="btn-row">
           <button type="button" id="exportBtn">Export</button>
@@ -353,6 +415,8 @@
       <button type="button" class="nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
     </div>
 
+    <div class="cal-tags" id="calTagRow" role="group" aria-label="Filter history by tag" hidden></div>
+
     <div class="cal-weekdays" aria-hidden="true">
       <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
     </div>
@@ -383,6 +447,21 @@
     "July", "August", "September", "October", "November", "December"
   ];
 
+  // A tag id is a lowercase slug, its name is length-capped, and its colour
+  // must match the same strict hex pattern as an accent. Between them, nothing
+  // a user types or imports can reach the stylesheet or the markup unchecked.
+  const TAG_ID_PATTERN = /^[a-z0-9]{1,12}$/;
+  const TAG_NAME_MAX = 16;
+  const MAX_TAGS = 6;
+  const TAG_COLORS = [
+    "#3f80c4", "#d08a3a", "#8a6fd1", "#3aa39a", "#d1629a", "#a8603c"
+  ];
+  const DEFAULT_TAGS = [
+    { id: "study", name: "Study", color: "#3f80c4" },
+    { id: "work", name: "Work", color: "#d08a3a" },
+    { id: "life", name: "Life", color: "#8a6fd1" }
+  ];
+
   const DEFAULTS = {
     focusSec: 25 * 60,
     breakSec: 5 * 60,
@@ -392,7 +471,9 @@
     theme: "system",
     accent: "",
     sound: "chiptune",
-    name: ""
+    name: "",
+    tags: DEFAULT_TAGS,
+    activeTag: ""
   };
 
   const LIMITS = {
@@ -455,15 +536,34 @@
   }
 
   // Pulls a day record out of the history, ignoring anything malformed.
+  //
+  // The byTag breakdown is returned by reference so a finishing session can
+  // update it in place. Anything that is not a plain object is swapped for a
+  // fresh one: an array is the dangerous case, because JSON.stringify drops
+  // named properties off an array and the breakdown would vanish on save.
   function dayRecord(map, key) {
     const entry = map[key];
     if (entry && typeof entry === "object") {
       return {
         sessions: Number(entry.sessions) || 0,
-        seconds: Number(entry.seconds) || 0
+        seconds: Number(entry.seconds) || 0,
+        byTag: (entry.byTag && typeof entry.byTag === "object" && !Array.isArray(entry.byTag))
+          ? entry.byTag
+          : {}
       };
     }
-    return { sessions: 0, seconds: 0 };
+    return { sessions: 0, seconds: 0, byTag: {} };
+  }
+
+  // The tag names are the one piece of user text that reaches markup - the
+  // calendar's day tooltips. Everything else interpolated there is a number.
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   /* ---------- storage ---------- */
@@ -550,6 +650,35 @@
     return sanitizeCount(readStored(STORE_COMPLETED));
   }
 
+  // Tags arrive from storage or from an imported file, so every field is
+  // checked and duplicated ids are dropped. A bad entry is skipped rather than
+  // failing the whole list, the same way settings work.
+  function sanitizeTags(raw) {
+    const source = Array.isArray(raw) ? raw : [];
+    const clean = [];
+    const seen = {};
+
+    source.forEach(function (item) {
+      if (clean.length >= MAX_TAGS) return;
+      if (!item || typeof item !== "object" || Array.isArray(item)) return;
+
+      const id = typeof item.id === "string" ? item.id : "";
+      if (!TAG_ID_PATTERN.test(id) || seen[id]) return;
+      seen[id] = true;
+
+      const name = typeof item.name === "string" ? item.name.trim() : "";
+      clean.push({
+        id: id,
+        name: (name || "Tag").slice(0, TAG_NAME_MAX),
+        color: (typeof item.color === "string" && ACCENT_PATTERN.test(item.color))
+          ? item.color
+          : TAG_COLORS[clean.length % TAG_COLORS.length]
+      });
+    });
+
+    return clean;
+  }
+
   // Settings may be missing, corrupt, hand-edited, or written by an older
   // version. Every field is validated individually so one bad value cannot
   // take out the rest.
@@ -566,6 +695,19 @@
     const sound = SOUND_KEYS.indexOf(source.sound) >= 0
       ? source.sound
       : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
+
+    // A missing list means "never configured", so the defaults apply. An empty
+    // list means the user deleted them all and has to stay empty.
+    const tags = Array.isArray(source.tags)
+      ? sanitizeTags(source.tags)
+      : sanitizeTags(DEFAULT_TAGS);
+
+    // The selection is only kept if it still points at a tag that exists,
+    // otherwise a deleted tag would leave every future session tagged with
+    // something invisible.
+    const activeTag = tags.some(function (tag) { return tag.id === source.activeTag; })
+      ? source.activeTag
+      : "";
 
     return {
       focusSec: clampInt(
@@ -595,7 +737,9 @@
         ? source.accent
         : DEFAULTS.accent,
       sound: sound,
-      name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name
+      name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name,
+      tags: tags,
+      activeTag: activeTag
     };
   }
 
@@ -607,6 +751,32 @@
       parsed = null;
     }
     return sanitizeSettings(parsed);
+  }
+
+  // The per-tag breakdown inside a day. Keys are tag ids, so they go through
+  // the same slug pattern as the tags themselves - which also means a key like
+  // "__proto__" can never get through to pollute an object.
+  function sanitizeByTag(raw) {
+    const clean = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return clean;
+
+    Object.keys(raw).forEach(function (id) {
+      if (!TAG_ID_PATTERN.test(id)) return;
+      const bucket = raw[id];
+      if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) return;
+
+      const sessions = Math.round(Number(bucket.sessions));
+      const seconds = Math.round(Number(bucket.seconds));
+      if (!Number.isFinite(sessions) || !Number.isFinite(seconds)) return;
+      if (sessions <= 0 && seconds <= 0) return;
+
+      clean[id] = {
+        sessions: Math.max(0, sessions),
+        seconds: Math.max(0, seconds)
+      };
+    });
+
+    return clean;
   }
 
   // Never trust stored JSON - anything unexpected is dropped rather than
@@ -626,10 +796,18 @@
       if (!Number.isFinite(sessions) || !Number.isFinite(seconds)) return;
       if (sessions <= 0 && seconds <= 0) return;
 
-      clean[key] = {
+      const record = {
         sessions: Math.max(0, sessions),
         seconds: Math.max(0, seconds)
       };
+
+      // Omitted entirely when empty, so days recorded before tags existed keep
+      // exactly the shape they had - there is no migration pass, and reading
+      // old history never rewrites it.
+      const byTag = sanitizeByTag(entry.byTag);
+      if (Object.keys(byTag).length > 0) record.byTag = byTag;
+
+      clean[key] = record;
     });
 
     return clean;
@@ -670,6 +848,12 @@
   let cycleCount = 0;
   let calYear = new Date().getFullYear();
   let calMonth = new Date().getMonth();
+  let calTag = "";
+
+  // The tag a running focus session will be filed under. Captured when the
+  // session starts, not when it ends, so switching chips mid-session cannot
+  // rewrite where the finished session belongs.
+  let sessionTag = settings.activeTag;
 
   const el = {
     time: document.getElementById("time"),
@@ -702,6 +886,9 @@
     importFile: document.getElementById("importFile"),
     dataStatus: document.getElementById("dataStatus"),
     nameInput: document.getElementById("nameInput"),
+    tagRow: document.getElementById("tagRow"),
+    tagList: document.getElementById("tagList"),
+    addTagBtn: document.getElementById("addTagBtn"),
     testHint: document.getElementById("testHint"),
     calendarOpen: document.getElementById("calendarOpen"),
     calendarModal: document.getElementById("calendarModal"),
@@ -710,6 +897,7 @@
     calNext: document.getElementById("calNext"),
     calTitle: document.getElementById("calTitle"),
     calGrid: document.getElementById("calGrid"),
+    calTagRow: document.getElementById("calTagRow"),
     calSummary: document.getElementById("calSummary")
   };
 
@@ -851,6 +1039,19 @@
     const entry = dayRecord(days, key);
     entry.sessions += 1;
     entry.seconds += seconds;
+
+    // The breakdown is kept alongside the day total rather than instead of it,
+    // so untagged sessions still count towards every total, and history written
+    // before tags existed stays valid.
+    const tag = tagById(sessionTag);
+    if (tag) {
+      const bucket = entry.byTag[tag.id];
+      entry.byTag[tag.id] = {
+        sessions: (bucket ? Number(bucket.sessions) || 0 : 0) + 1,
+        seconds: (bucket ? Number(bucket.seconds) || 0 : 0) + seconds
+      };
+    }
+
     days[key] = entry;
     store.set(STORE_DAYS, JSON.stringify(days));
   }
@@ -981,6 +1182,12 @@
     cancelAuto();
     if (running) return;
     ensureAudio();
+
+    // "left === total" means this is a session starting from the top rather
+    // than a resume after a pause, so it is the moment to fix which tag the
+    // session belongs to.
+    if (mode === "focus" && left === total) sessionTag = settings.activeTag;
+
     running = true;
     endAt = Date.now() + left * 1000;
     timerId = setInterval(tick, 250);
@@ -1059,6 +1266,228 @@
       playSound(selectedSound);
       renderSoundChoice();
     });
+  });
+
+  /* ---------- tags ---------- */
+
+  function tagById(id) {
+    let found = null;
+    settings.tags.forEach(function (tag) {
+      if (tag.id === id) found = tag;
+    });
+    return found;
+  }
+
+  // Removing a tag must never cost the user time, so the reminder only appears
+  // when there is actually a breakdown to lose.
+  function tagHasHistory(id) {
+    return Object.keys(days).some(function (key) {
+      const entry = days[key];
+      return Boolean(entry && entry.byTag && entry.byTag[id]);
+    });
+  }
+
+  // Seconds belong to the selected tag when the history is filtered, and to the
+  // whole day otherwise. Days recorded before tags existed have no breakdown,
+  // so they read as zero under any tag - honest, if a little blunt.
+  function tagSeconds(record, id) {
+    if (!id) return record.seconds;
+    const bucket = record.byTag && record.byTag[id];
+    return bucket ? (Number(bucket.seconds) || 0) : 0;
+  }
+
+  function tagSessions(record, id) {
+    if (!id) return record.sessions;
+    const bucket = record.byTag && record.byTag[id];
+    return bucket ? (Number(bucket.sessions) || 0) : 0;
+  }
+
+  // Chips are built as DOM nodes, never as markup. Tag names are user text, and
+  // a name containing a quote or a "<" would otherwise be injected verbatim
+  // into the chip row. Only the colour - already validated as hex - is set as
+  // a custom property.
+  function makeChip(key, value, label, color, active) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip";
+    chip.dataset[key] = value;
+    chip.textContent = label;
+    if (color) chip.style.setProperty("--tag", color);
+    chip.setAttribute("aria-pressed", String(active));
+    return chip;
+  }
+
+  function renderTags() {
+    el.tagRow.textContent = "";
+    el.tagRow.hidden = settings.tags.length === 0;
+    if (settings.tags.length === 0) return;
+
+    el.tagRow.appendChild(
+      makeChip("tag", "", "No tag", "", !settings.activeTag)
+    );
+    settings.tags.forEach(function (tag) {
+      el.tagRow.appendChild(
+        makeChip("tag", tag.id, tag.name, tag.color, tag.id === settings.activeTag)
+      );
+    });
+  }
+
+  function renderCalTags() {
+    el.calTagRow.textContent = "";
+    el.calTagRow.hidden = settings.tags.length === 0;
+    if (settings.tags.length === 0) return;
+
+    el.calTagRow.appendChild(makeChip("calTag", "", "All", "", !calTag));
+    settings.tags.forEach(function (tag) {
+      el.calTagRow.appendChild(
+        makeChip("calTag", tag.id, tag.name, tag.color, tag.id === calTag)
+      );
+    });
+  }
+
+  // Ids stay internal and are never derived from the visible name, so renaming
+  // a tag cannot silently orphan the history already filed under it.
+  function uniqueTagId() {
+    const taken = {};
+    settings.tags.forEach(function (tag) { taken[tag.id] = true; });
+
+    let n = settings.tags.length + 1;
+    let id = "tag" + n;
+    while (taken[id]) {
+      n += 1;
+      id = "tag" + n;
+    }
+    return id;
+  }
+
+  function nextTagColor() {
+    const used = settings.tags.map(function (tag) { return tag.color; });
+    let pick = null;
+    TAG_COLORS.forEach(function (candidate) {
+      if (pick === null && used.indexOf(candidate) < 0) pick = candidate;
+    });
+    return pick === null ? TAG_COLORS[settings.tags.length % TAG_COLORS.length] : pick;
+  }
+
+  function renderTagEditor() {
+    el.tagList.textContent = "";
+
+    settings.tags.forEach(function (tag) {
+      const row = document.createElement("div");
+      row.className = "tag-edit";
+
+      const color = document.createElement("button");
+      color.type = "button";
+      color.className = "tag-color";
+      color.style.setProperty("--tag", tag.color);
+      color.title = "Change colour";
+      color.setAttribute("aria-label", "Change the colour of " + tag.name);
+      color.addEventListener("click", function () { cycleTagColor(tag.id); });
+      row.appendChild(color);
+
+      const name = document.createElement("input");
+      name.type = "text";
+      name.className = "tag-name";
+      name.value = tag.name;
+      name.maxLength = TAG_NAME_MAX;
+      name.setAttribute("aria-label", "Name of this tag");
+      // Typing updates the chips live, but the editor is deliberately not
+      // re-rendered here - that would replace the field and drop the caret.
+      name.addEventListener("input", function () { renameTag(tag.id, name.value); });
+      row.appendChild(name);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "tag-remove";
+      remove.textContent = "\u00d7";
+      remove.title = "Remove tag";
+      remove.setAttribute("aria-label", "Remove the tag " + tag.name);
+      remove.addEventListener("click", function () { removeTag(tag.id); });
+      row.appendChild(remove);
+
+      el.tagList.appendChild(row);
+    });
+
+    el.addTagBtn.disabled = settings.tags.length >= MAX_TAGS;
+  }
+
+  function renameTag(id, value) {
+    const tag = tagById(id);
+    if (!tag) return;
+    const trimmed = value.trim().slice(0, TAG_NAME_MAX);
+    tag.name = trimmed || "Tag";
+    saveSettings();
+    renderTags();
+  }
+
+  function addTag() {
+    if (settings.tags.length >= MAX_TAGS) return;
+    settings.tags.push({
+      id: uniqueTagId(),
+      name: "Tag " + (settings.tags.length + 1),
+      color: nextTagColor()
+    });
+    saveSettings();
+    renderTagEditor();
+    renderTags();
+    renderCalTags();
+  }
+
+  function cycleTagColor(id) {
+    const tag = tagById(id);
+    if (!tag) return;
+    tag.color = TAG_COLORS[(TAG_COLORS.indexOf(tag.color) + 1) % TAG_COLORS.length];
+    saveSettings();
+    renderTagEditor();
+    renderTags();
+    renderCalTags();
+    if (!el.calendarModal.hidden) renderCalendar();
+  }
+
+  function removeTag(id) {
+    const tag = tagById(id);
+    if (!tag) return;
+
+    // The day totals are the real record and are not touched here, so removing
+    // a tag cannot lose time - it only stops that time being broken down.
+    if (tagHasHistory(id)) {
+      const confirmed = window.confirm(
+        "Remove the tag \"" + tag.name + "\"?\n\n" +
+        "All of your recorded time is kept, and it still counts towards your " +
+        "daily totals and streak. Only the breakdown by this tag is lost."
+      );
+      if (!confirmed) return;
+    }
+
+    settings.tags = settings.tags.filter(function (item) { return item.id !== id; });
+    if (settings.activeTag === id) settings.activeTag = "";
+    if (sessionTag === id) sessionTag = "";
+    if (calTag === id) calTag = "";
+    saveSettings();
+    renderTagEditor();
+    renderTags();
+    renderCalTags();
+    if (!el.calendarModal.hidden) renderCalendar();
+  }
+
+  // Wired next to the code they call, for the same reason the Start and Reset
+  // listeners are: a rewrite that loses one of these loses a whole feature.
+  el.tagRow.addEventListener("click", function (event) {
+    const chip = event.target.closest("[data-tag]");
+    if (!chip) return;
+    settings.activeTag = chip.dataset.tag;
+    saveSettings();
+    renderTags();
+  });
+
+  el.addTagBtn.addEventListener("click", addTag);
+
+  el.calTagRow.addEventListener("click", function (event) {
+    const chip = event.target.closest("[data-cal-tag]");
+    if (!chip) return;
+    calTag = chip.dataset.calTag;
+    renderCalTags();
+    renderCalendar();
   });
 
   /* ---------- theme and accent ---------- */
@@ -1249,12 +1678,14 @@
   /* ---------- calendar ---------- */
 
   // Intensity is relative to the best day on record, so the grid stays
-  // readable whether you focus 25 minutes or 5 hours a day.
+  // readable whether you focus 25 minutes or 5 hours a day. When the history is
+  // filtered to one tag, the scale has to be that tag's best day instead -
+  // otherwise a half-hour tag would look almost empty against a five-hour day.
   function bestDaySeconds() {
     let best = 0;
     Object.keys(days).forEach(function (key) {
-      const record = dayRecord(days, key);
-      if (record.seconds > best) best = record.seconds;
+      const value = tagSeconds(dayRecord(days, key), calTag);
+      if (value > best) best = value;
     });
     return best;
   }
@@ -1271,6 +1702,15 @@
 
   function describeDay(day, record) {
     const label = day + " " + MONTH_NAMES[calMonth];
+
+    if (calTag) {
+      const tag = tagById(calTag);
+      const name = tag ? tag.name : "tag";
+      const seconds = tagSeconds(record, calTag);
+      if (!(seconds > 0)) return label + ": no " + name + " focus";
+      return label + ": " + name + " " + formatMinutes(seconds) + " min";
+    }
+
     if (record.sessions === 0) return label + ": no focus";
     return label + ": " + record.sessions +
       (record.sessions === 1 ? " session, " : " sessions, ") +
@@ -1279,14 +1719,24 @@
 
   function renderCalendar() {
     const best = bestDaySeconds();
+    const tag = calTag ? tagById(calTag) : null;
     const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
     const leadingBlanks = new Date(calYear, calMonth, 1).getDay();
     const todayKey = dateKey();
 
     el.calTitle.textContent = MONTH_NAMES[calMonth] + " " + calYear;
 
-    // Every value interpolated here is a number, so building the grid as a
-    // string is safe - no user text ever reaches it.
+    // A filtered grid is painted in the tag's own colour. The property goes on
+    // the grid rather than on :root so clearing the filter reverts it by
+    // itself, without fighting the accent that applyTheme() sets.
+    if (tag) {
+      el.calGrid.style.setProperty("--cal-accent", tag.color);
+    } else {
+      el.calGrid.style.removeProperty("--cal-accent");
+    }
+
+    // Every value interpolated here is a number, except the day tooltip, which
+    // can carry a tag name and is escaped for exactly that reason.
     let cells = "";
     let index;
     for (index = 0; index < leadingBlanks; index += 1) {
@@ -1300,15 +1750,16 @@
     for (let day = 1; day <= daysInMonth; day += 1) {
       const key = keyFor(calYear, calMonth, day);
       const record = dayRecord(days, key);
-      if (record.seconds > 0) {
+      const value = tagSeconds(record, calTag);
+      if (value > 0) {
         activeDays += 1;
-        monthSeconds += record.seconds;
-        monthSessions += record.sessions;
+        monthSeconds += value;
+        monthSessions += tagSessions(record, calTag);
       }
-      const level = levelFor(record.seconds, best);
+      const level = levelFor(value, best);
       const classes = "cal-cell lvl" + level + (key === todayKey ? " today" : "");
       cells += '<div class="' + classes + '" title="' +
-        describeDay(day, record) + '">' + day + "</div>";
+        escapeHtml(describeDay(day, record)) + '">' + day + "</div>";
     }
 
     el.calGrid.innerHTML = cells;
@@ -1316,8 +1767,10 @@
     el.calSummary.textContent = monthSeconds > 0
       ? activeDays + (activeDays === 1 ? " day" : " days") + " · " +
         monthSessions + (monthSessions === 1 ? " session" : " sessions") +
-        " · " + formatMinutes(monthSeconds) + " min focused"
-      : "No focus recorded this month yet.";
+        " · " + formatMinutes(monthSeconds) + " min " +
+        (tag ? "of " + tag.name : "focused")
+      : (tag ? "No " + tag.name + " time recorded this month."
+        : "No focus recorded this month yet.");
 
     // Nothing to see beyond the current month.
     const now = new Date();
@@ -1329,6 +1782,10 @@
     const now = new Date();
     calYear = now.getFullYear();
     calMonth = now.getMonth();
+    // Always open unfiltered: a filter left over from last time would look
+    // like missing history.
+    calTag = "";
+    renderCalTags();
     renderCalendar();
     el.calendarModal.hidden = false;
     el.calClose.focus();
@@ -1366,7 +1823,10 @@
 
   /* ---------- backup and restore ---------- */
 
-  const BACKUP_VERSION = 1;
+  // Bumped when day records gained a per-tag breakdown. Import never checks
+  // this, so an older backup still loads; it is there purely to make the file
+  // self-describing.
+  const BACKUP_VERSION = 2;
 
   function showDataStatus(message, state) {
     el.dataStatus.textContent = message;
@@ -1445,6 +1905,14 @@
     resetToFocus();
     syncInputs();
     el.nameInput.value = settings.name;
+    // A backup carries the tags and the active selection too, and the selection
+    // has already been re-validated. A history filter pointing at a tag that no
+    // longer exists is dropped rather than left showing an empty grid.
+    sessionTag = settings.activeTag;
+    if (calTag && !tagById(calTag)) calTag = "";
+    renderTags();
+    renderTagEditor();
+    renderCalTags();
     renderSoundChoice();
     renderPresets();
     // A backup carries the theme and accent too, so they have to be applied
@@ -1537,6 +2005,8 @@
 
   syncInputs();
   el.nameInput.value = settings.name;
+  renderTags();
+  renderTagEditor();
   renderSoundChoice();
   renderPresets();
   applyTheme();
