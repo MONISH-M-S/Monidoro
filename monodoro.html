@@ -108,6 +108,8 @@
 </main>
 
 <script>
+  /* ---------- configuration ---------- */
+
   // Durations are in SECONDS. Normal use needs no URL parameters.
   // For quick testing, override them in the address bar, e.g.
   //   monodoro.html?focusSec=10&breakSec=5
@@ -122,9 +124,69 @@
   const BREAK = duration("breakSec", 5 * 60);
   const TEST_MODE = params.has("focusSec") || params.has("breakSec");
   const RING_LENGTH = 2 * Math.PI * 120;
-
-  // Pause between one session ending and the next starting by itself.
   const AUTO_START_DELAY = 1500;
+  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
+  const DEFAULT_SOUND = "chiptune";
+
+  /* ---------- storage ---------- */
+
+  // Storage is not guaranteed. Private windows block it, and some browsers
+  // treat file:// pages as an opaque origin, where localStorage throws.
+  // Everything falls back to memory so the app still runs - it just forgets
+  // on refresh instead of crashing.
+  const store = (function () {
+    let backing = null;
+    try {
+      const probe = "__monodoro_probe__";
+      window.localStorage.setItem(probe, "1");
+      window.localStorage.removeItem(probe);
+      backing = window.localStorage;
+    } catch (err) {
+      backing = null;
+    }
+
+    const memory = {};
+
+    return {
+      available: function () {
+        return backing !== null;
+      },
+      get: function (key) {
+        if (backing) {
+          try {
+            return backing.getItem(key);
+          } catch (err) {
+            // fall through to the memory copy
+          }
+        }
+        return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+      },
+      set: function (key, value) {
+        memory[key] = value;
+        if (!backing) return;
+        try {
+          backing.setItem(key, value);
+        } catch (err) {
+          // Quota exceeded or storage blocked mid-session - keep going.
+        }
+      }
+    };
+  })();
+
+  const STORE_COMPLETED = "monodoro.completed";
+  const STORE_SOUND = "monodoro.sound";
+
+  function loadCount() {
+    const value = Number(store.get(STORE_COMPLETED));
+    return Number.isFinite(value) && value >= 0 ? value : 0;
+  }
+
+  function loadSound() {
+    const value = store.get(STORE_SOUND);
+    return SOUND_KEYS.indexOf(value) >= 0 ? value : DEFAULT_SOUND;
+  }
+
+  /* ---------- state ---------- */
 
   let mode = "focus";
   let total = FOCUS;
@@ -133,9 +195,9 @@
   let timerId = null;
   let endAt = 0;
   let autoId = null;
-  let completed = 0;
+  let completed = loadCount();
   let audioCtx = null;
-  let selectedSound = "chiptune";
+  let selectedSound = loadSound();
 
   const el = {
     time: document.getElementById("time"),
@@ -262,14 +324,17 @@
   function finish() {
     stop();
     playSound(selectedSound);
+
     if (mode === "focus") {
       completed += 1;
+      store.set(STORE_COMPLETED, String(completed));
       mode = "break";
       total = BREAK;
     } else {
       mode = "focus";
       total = FOCUS;
     }
+
     left = total;
     render();
     autoId = setTimeout(function () {
@@ -326,6 +391,7 @@
   soundButtons.forEach(function (btn) {
     btn.addEventListener("click", function () {
       selectedSound = btn.dataset.sound;
+      store.set(STORE_SOUND, selectedSound);
       ensureAudio();
       playSound(selectedSound);
       renderSoundChoice();
@@ -337,6 +403,13 @@
 
   renderSoundChoice();
   render();
+
+  if (!store.available()) {
+    console.warn(
+      "Monodoro: persistent storage is unavailable here, so progress will " +
+      "reset when the page reloads."
+    );
+  }
 </script>
 </body>
 </html>
