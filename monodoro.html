@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Focus Timer</title>
+<title>Monodoro</title>
 <style>
   :root{
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
@@ -63,7 +63,7 @@
 </head>
 <body>
 <main>
-  <h1>Focus Timer</h1>
+  <h1>Monodoro</h1>
   <p class="badge" id="badge" hidden>test mode</p>
 
   <div class="dial">
@@ -88,7 +88,7 @@
 <script>
   // Durations are in SECONDS. Normal use needs no URL parameters.
   // For quick testing, override them in the address bar, e.g.
-  //   focus-timer.html?focusSec=10&breakSec=5
+  //   monodoro.html?focusSec=10&breakSec=5
   const params = new URLSearchParams(location.search);
 
   function duration(name, fallback) {
@@ -136,7 +136,7 @@
     el.count.textContent = completed;
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
-    document.title = (running ? text + " - " : "") + "Focus Timer";
+    document.title = (running ? text + " - " : "") + "Monodoro";
   }
 
   // Recompute the remaining time from the clock instead of counting ticks,
