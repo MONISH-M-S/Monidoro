@@ -241,8 +241,8 @@
       </label>
 
       <label class="field">
-        <span class="field-label">Daily goal (sessions, 0 to hide)</span>
-        <input type="number" id="goalInput" min="0" max="20" step="1" inputmode="numeric">
+        <span class="field-label">Daily goal (minutes, 0 to hide)</span>
+        <input type="number" id="goalInput" min="0" max="600" step="5" inputmode="numeric">
       </label>
 
       <div class="field">
@@ -336,7 +336,7 @@
     breakSec: 5 * 60,
     longBreakSec: 15 * 60,
     cycles: 4,
-    goal: 4,
+    goalMinutes: 120,
     sound: "chiptune",
     name: ""
   };
@@ -346,7 +346,7 @@
     break: { min: 60, max: 60 * 60 },
     longBreak: { min: 60, max: 60 * 60 },
     cycles: { min: 2, max: 8 },
-    goal: { min: 0, max: 20 }
+    goalMinutes: { min: 0, max: 600 }
   };
 
   const MODE_LABELS = {
@@ -504,8 +504,12 @@
       cycles: clampInt(
         source.cycles, LIMITS.cycles.min, LIMITS.cycles.max, DEFAULTS.cycles
       ),
-      goal: clampInt(
-        source.goal, LIMITS.goal.min, LIMITS.goal.max, DEFAULTS.goal
+      // Note: this is minutes, and it replaced an earlier goal measured in
+      // sessions under a different key. Reusing the old key would have
+      // silently turned a "4 session" goal into a "4 minute" goal.
+      goalMinutes: clampInt(
+        source.goalMinutes, LIMITS.goalMinutes.min, LIMITS.goalMinutes.max,
+        DEFAULTS.goalMinutes
       ),
       sound: sound,
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name
@@ -717,15 +721,25 @@
   }
 
   function renderGoal(today) {
-    if (settings.goal <= 0) {
+    const goal = settings.goalMinutes;
+    if (goal <= 0) {
       el.goal.hidden = true;
       return;
     }
     el.goal.hidden = false;
-    const done = Math.min(today.sessions, settings.goal);
-    el.goalCount.textContent = today.sessions + " / " + settings.goal +
-      (today.sessions >= settings.goal ? " \u2713" : "");
-    el.goalBar.style.width = Math.round((done / settings.goal) * 100) + "%";
+
+    // The goal is minutes, but a partly finished minute still counts as
+    // progress, so the bar is driven by seconds. Any progress shows at least a
+    // sliver, otherwise a short session against a big goal looks like nothing
+    // happened at all.
+    const doneMinutes = Math.min(today.seconds / 60, goal);
+    const percent = today.seconds <= 0
+      ? 0
+      : Math.max(3, Math.round((doneMinutes / goal) * 100));
+    el.goalCount.textContent =
+      formatMinutes(today.seconds) + " / " + goal + " min" +
+      (today.seconds >= goal * 60 ? " \u2713" : "");
+    el.goalBar.style.width = percent + "%";
   }
 
   function renderStreaks() {
@@ -1029,7 +1043,7 @@
     el.longBreakInput.value = settings.longBreakSec >= 60
       ? Math.round(settings.longBreakSec / 60) : "";
     el.cyclesInput.value = settings.cycles;
-    el.goalInput.value = settings.goal;
+    el.goalInput.value = settings.goalMinutes;
   }
 
   // Changing a duration while the clock is stopped should take effect
@@ -1048,8 +1062,9 @@
     settings.cycles = clampInt(
       el.cyclesInput.value, LIMITS.cycles.min, LIMITS.cycles.max, settings.cycles
     );
-    settings.goal = clampInt(
-      el.goalInput.value, LIMITS.goal.min, LIMITS.goal.max, settings.goal
+    settings.goalMinutes = clampInt(
+      el.goalInput.value, LIMITS.goalMinutes.min, LIMITS.goalMinutes.max,
+      settings.goalMinutes
     );
     saveSettings();
     syncInputs();
