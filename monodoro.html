@@ -9,13 +9,26 @@
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
     --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --longbreak:#5b4fa8;
     --warn:#b8860b; --cal-accent:#3f7d4e;
+    color-scheme:light;
   }
+  /* The :not() lets an explicit "light" choice beat a dark OS setting. The
+     dark block is then repeated below for an explicit "dark" choice, because
+     CSS has no way to share one declaration block between a media query and a
+     selector. Keep the two dark blocks identical. */
   @media (prefers-color-scheme:dark){
-    :root{
+    :root:not([data-theme="light"]){
       --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
       --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
       --warn:#e0b04a; --cal-accent:#6dbb7f;
+      color-scheme:dark;
     }
+  }
+  :root[data-theme="light"]{color-scheme:light}
+  :root[data-theme="dark"]{
+    --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
+    --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
+    --warn:#e0b04a; --cal-accent:#6dbb7f;
+    color-scheme:dark;
   }
   /* Deliberately NO transition on anything whose value comes from a custom
      property (background:var(--bg), stroke:var(--accent), ...). Chromium gets
@@ -106,6 +119,16 @@
   .btn-row button{min-width:0; flex:1 1 62px; padding:9px 6px; font-size:.76rem}
   .btn-row button[aria-pressed="true"]{
     background:var(--accent); border-color:var(--accent); color:var(--bg);
+  }
+  .swatch{
+    min-width:0; flex:0 0 34px; height:34px; padding:0;
+    border-radius:8px; background:var(--sw); border-color:var(--line);
+  }
+  /* Specificity has to beat .btn-row button[aria-pressed="true"] above,
+     otherwise the selected swatch would just paint itself the accent colour. */
+  .btn-row button.swatch[aria-pressed="true"]{
+    background:var(--sw); border-color:var(--ink);
+    box-shadow:inset 0 0 0 2px var(--ink);
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
   .hint[data-state="ok"]{color:var(--accent)}
@@ -248,6 +271,28 @@
       </label>
 
       <div class="field">
+        <span class="field-label">Theme</span>
+        <div class="btn-row" id="themeRow">
+          <button type="button" data-theme-choice="system">System</button>
+          <button type="button" data-theme-choice="light">Light</button>
+          <button type="button" data-theme-choice="dark">Dark</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Accent colour</span>
+        <div class="btn-row" id="accentRow">
+          <button type="button" data-accent="" title="Use the built-in accent">Default</button>
+          <button type="button" class="swatch" data-accent="#4a9d64" aria-label="Green" title="Green" style="--sw:#4a9d64"></button>
+          <button type="button" class="swatch" data-accent="#3f80c4" aria-label="Blue" title="Blue" style="--sw:#3f80c4"></button>
+          <button type="button" class="swatch" data-accent="#8a6fd1" aria-label="Purple" title="Purple" style="--sw:#8a6fd1"></button>
+          <button type="button" class="swatch" data-accent="#d08a3a" aria-label="Amber" title="Amber" style="--sw:#d08a3a"></button>
+          <button type="button" class="swatch" data-accent="#d1629a" aria-label="Pink" title="Pink" style="--sw:#d1629a"></button>
+          <button type="button" class="swatch" data-accent="#3aa39a" aria-label="Teal" title="Teal" style="--sw:#3aa39a"></button>
+        </div>
+      </div>
+
+      <div class="field">
         <span class="field-label">Alert sound</span>
         <div class="btn-row" id="soundRow">
           <button type="button" data-sound="classic">Classic</button>
@@ -328,6 +373,11 @@
 
   const params = new URLSearchParams(location.search);
   const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
+  const THEME_CHOICES = ["system", "light", "dark"];
+
+  // Accents are restricted to a plain six-digit hex colour, so a hand-edited
+  // or imported value can never smuggle anything else into the stylesheet.
+  const ACCENT_PATTERN = /^#[0-9a-f]{6}$/i;
   const MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
@@ -339,6 +389,8 @@
     longBreakSec: 15 * 60,
     cycles: 4,
     goalMinutes: 120,
+    theme: "system",
+    accent: "",
     sound: "chiptune",
     name: ""
   };
@@ -513,6 +565,12 @@
         source.goalMinutes, LIMITS.goalMinutes.min, LIMITS.goalMinutes.max,
         DEFAULTS.goalMinutes
       ),
+      theme: THEME_CHOICES.indexOf(source.theme) >= 0
+        ? source.theme
+        : DEFAULTS.theme,
+      accent: (typeof source.accent === "string" && ACCENT_PATTERN.test(source.accent))
+        ? source.accent
+        : DEFAULTS.accent,
       sound: sound,
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name
     };
@@ -980,6 +1038,69 @@
     });
   });
 
+  /* ---------- theme and accent ---------- */
+
+  const themeButtons = Array.prototype.slice.call(
+    document.querySelectorAll("[data-theme-choice]")
+  );
+  const accentButtons = Array.prototype.slice.call(
+    document.querySelectorAll("[data-accent]")
+  );
+
+  // The choice is written to <html> so the CSS can resolve it. "System"
+  // removes the attribute entirely, which hands control back to the media
+  // query and keeps it following the OS if you change it later.
+  function applyTheme() {
+    const root = document.documentElement;
+
+    if (settings.theme === "light" || settings.theme === "dark") {
+      root.setAttribute("data-theme", settings.theme);
+    } else {
+      root.removeAttribute("data-theme");
+    }
+
+    // The accent lives on :root as an inline custom property. Breaks override
+    // --accent further down on <body>, so they keep their own colours.
+    if (settings.accent) {
+      root.style.setProperty("--accent", settings.accent);
+      root.style.setProperty("--cal-accent", settings.accent);
+    } else {
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--cal-accent");
+    }
+  }
+
+  function renderThemeChoice() {
+    themeButtons.forEach(function (btn) {
+      btn.setAttribute(
+        "aria-pressed", String(btn.dataset.themeChoice === settings.theme)
+      );
+    });
+    accentButtons.forEach(function (btn) {
+      btn.setAttribute(
+        "aria-pressed", String(btn.dataset.accent === settings.accent)
+      );
+    });
+  }
+
+  themeButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      settings.theme = btn.dataset.themeChoice;
+      saveSettings();
+      applyTheme();
+      renderThemeChoice();
+    });
+  });
+
+  accentButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      settings.accent = btn.dataset.accent;
+      saveSettings();
+      applyTheme();
+      renderThemeChoice();
+    });
+  });
+
   /* ---------- presets ---------- */
 
   const presetButtons = Array.prototype.slice.call(
@@ -1303,6 +1424,10 @@
     el.nameInput.value = settings.name;
     renderSoundChoice();
     renderPresets();
+    // A backup carries the theme and accent too, so they have to be applied
+    // here - otherwise an import silently keeps the old appearance.
+    applyTheme();
+    renderThemeChoice();
     renderGreeting();
     renderStats();
 
@@ -1391,6 +1516,8 @@
   el.nameInput.value = settings.name;
   renderSoundChoice();
   renderPresets();
+  applyTheme();
+  renderThemeChoice();
   renderGreeting();
   renderStats();
   render();
