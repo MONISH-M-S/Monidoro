@@ -42,6 +42,8 @@ and pushed.
 - Theme: system / light / dark, plus an accent colour picker
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
+- Focus noise: rain / brown / cafe, synthesised from two noise buffers and
+  filtered, with a volume slider. Plays only while a focus session runs
 
 ## Storage keys (localStorage)
 
@@ -51,7 +53,7 @@ erase anyone's history.
 
 | Key | Shape |
 |---|---|
-| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, name, tags, activeTag}` |
+| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, ambient, ambientVolume, name, tags, activeTag}` |
 | `monidoro.completed` | total focus sessions ever, as a string number |
 | `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds, byTag?}}` |
 
@@ -98,10 +100,26 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-### 7. Ambient focus noise + volume
+### 7. Swan Lake alert sound
 
-Rain / brown noise / cafe hum, synthesised through Web Audio so there are still
-zero asset files. Volume slider. Start and stop with the focus session.
+Requested, researched, not yet written. It is a fifth entry in `SOUNDS`, added
+to `SOUND_KEYS` and to the `data-sound` button row — the sound picker already
+handles rendering and preview, so the work is confined to one function.
+
+Tchaikovsky, *Swan Lake* Op. 20, Act II No. 10 (1876) — **public domain**, and
+synthesised like the others, so no asset file. The theme is in B minor (two
+sharps: F♯ and C♯). Bars 2-3, the recognisable opening:
+
+```
+F♯5 | B4 C♯5 D5 E5 | F♯5 D5 F♯5 D5
+```
+
+Frequencies for `tone()`: B4 493.88, C♯5 554.37, D5 587.33, E5 659.25,
+F♯5 739.99. A triangle wave with the existing envelope reads as a music box and
+suits the app. Plan was to hold the opening F♯ and the final D, and keep the
+whole thing under about 3.5 seconds so it stays an alert rather than a song.
+The second phrase (`C♯ D E F♯ G | A G F♯ G A | B A G A B`) continues it if a
+longer version is ever wanted.
 
 ### 8. Keyboard shortcuts + notification
 
@@ -168,6 +186,16 @@ focusing and dies if you bail early.
    so nothing is lost and everything migrates forward on the next save. Any
    future rename of a key must repeat this, and the old key must be *read*, not
    deleted.
+
+9. **Audio can be measured, so measure it.** Every noise and tone is verified by
+   building the real graph on an `OfflineAudioContext`, rendering it, and
+   checking RMS, peak and zero-crossing rate. That is how two silent bugs were
+   caught: Cafe was 4x quieter than Brown (a narrow band-pass discards far more
+   energy than a wide low-pass), and a `DynamicsCompressorNode` set to a -3 dB
+   threshold was squashing the *whole* signal to about 40% of its intended level
+   rather than catching peaks, because noise is dense enough to keep a
+   compressor engaged continuously. It now sits at -1 dB and reports 0.00 dB of
+   reduction, which is what a safety net should look like.
 
 ## How features were verified
 

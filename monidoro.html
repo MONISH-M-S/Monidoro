@@ -178,6 +178,14 @@
     background:transparent; border-color:var(--line);
   }
 
+  /* The volume slider is the one native control in the app; accent-color is
+     used so it follows the chosen accent without any custom track drawing. */
+  .field input[type="range"]{
+    width:100%; padding:0; border:0; background:transparent;
+    accent-color:var(--accent);
+  }
+  .field input[type="range"]:disabled{opacity:.4}
+
   .stats{
     margin-top:26px; padding-top:18px; border-top:1px solid var(--line);
     font-size:.8rem; color:var(--mut); line-height:1.7;
@@ -352,6 +360,23 @@
         </div>
       </div>
 
+      <div class="field">
+        <span class="field-label">Focus noise</span>
+        <div class="btn-row" id="ambientRow">
+          <button type="button" data-ambient="off">Off</button>
+          <button type="button" data-ambient="rain">Rain</button>
+          <button type="button" data-ambient="deep">Brown</button>
+          <button type="button" data-ambient="cafe">Cafe</button>
+        </div>
+        <p class="hint">Plays only while a focus session runs. Picking one previews it.</p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Noise volume</span>
+        <input type="range" id="ambientVolume" min="0" max="100" step="1"
+               aria-label="Focus noise volume">
+      </div>
+
       <label class="field">
         <span class="field-label">Your name</span>
         <input type="text" id="nameInput" maxlength="24" placeholder="optional">
@@ -438,6 +463,9 @@
   const params = new URLSearchParams(location.search);
   const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
   const THEME_CHOICES = ["system", "light", "dark"];
+  // Focus noise is synthesised too, so the app still ships as one file with no
+  // audio assets and keeps working offline.
+  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe"];
 
   // Accents are restricted to a plain six-digit hex colour, so a hand-edited
   // or imported value can never smuggle anything else into the stylesheet.
@@ -471,6 +499,9 @@
     theme: "system",
     accent: "",
     sound: "chiptune",
+    // Off by default: nothing should start making noise unasked.
+    ambient: "off",
+    ambientVolume: 40,
     name: "",
     tags: DEFAULT_TAGS,
     activeTag: ""
@@ -737,6 +768,10 @@
         ? source.accent
         : DEFAULTS.accent,
       sound: sound,
+      ambient: AMBIENT_KEYS.indexOf(source.ambient) >= 0
+        ? source.ambient
+        : DEFAULTS.ambient,
+      ambientVolume: clampInt(source.ambientVolume, 0, 100, DEFAULTS.ambientVolume),
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name,
       tags: tags,
       activeTag: activeTag
@@ -886,6 +921,7 @@
     importFile: document.getElementById("importFile"),
     dataStatus: document.getElementById("dataStatus"),
     nameInput: document.getElementById("nameInput"),
+    ambientVolume: document.getElementById("ambientVolume"),
     tagRow: document.getElementById("tagRow"),
     tagList: document.getElementById("tagList"),
     addTagBtn: document.getElementById("addTagBtn"),
@@ -1127,6 +1163,236 @@
     }
   }
 
+  /* ---------- focus noise ---------- */
+
+  // Every noise is a couple of filtered layers of one of two precomputed noise
+  // buffers, so there is still nothing to download and nothing to decode.
+  //
+  // `trim` equalises loudness across the three. A narrow band-pass throws away
+  // far more energy than a wide low-pass, so without it Cafe needed the slider
+  // near the top to be heard next to Brown. The figures come from rendering
+  // each noise offline and matching RMS, not from guessing by ear: at full
+  // volume all three now land at an RMS of about 0.10 with peaks near 0.4, so
+  // there is headroom and the limiter never has to intervene.
+  const AMBIENT = {
+    rain: {
+      trim: 1.9,
+      lfo: { rate: 0.13, depth: 0.15 },
+      layers: [
+        { noise: "white", type: "highpass", freq: 900, q: 0.6, level: 0.55 },
+        { noise: "white", type: "bandpass", freq: 3200, q: 0.4, level: 0.30 },
+        { noise: "brown", type: "lowpass", freq: 480, q: 0.5, level: 0.35 }
+      ]
+    },
+    // Plain brown noise: the deep, even rumble that masks speech best.
+    deep: {
+      trim: 1.1,
+      lfo: { rate: 0.05, depth: 0.08 },
+      layers: [
+        { noise: "brown", type: "lowpass", freq: 700, q: 0.5, level: 0.9 },
+        { noise: "brown", type: "lowpass", freq: 180, q: 0.5, level: 0.5 }
+      ]
+    },
+    // Brown noise through a speech-shaped band that breathes slowly, plus a
+    // thin hiss on top so it does not read as pure rumble.
+    cafe: {
+      trim: 3.6,
+      lfo: { rate: 0.085, depth: 0.18 },
+      layers: [
+        { noise: "brown", type: "bandpass", freq: 480, q: 0.8, level: 0.8 },
+        { noise: "white", type: "bandpass", freq: 1600, q: 0.5, level: 0.14 }
+      ]
+    }
+  };
+
+  let noiseCache = null;
+  let ambientNodes = null;
+  let ambientStopId = null;
+
+  function buildNoise(kind) {
+    const seconds = 4;
+    const length = Math.floor(audioCtx.sampleRate * seconds);
+    const buffer = audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    let last = 0;
+    for (let i = 0; i < length; i += 1) {
+      const white = Math.random() * 2 - 1;
+      if (kind === "brown") {
+        // A leaky integrator: the random walk whose falling spectrum is what
+        // gives brown noise its rumble.
+        last = (last + 0.02 * white) / 1.02;
+        data[i] = last;
+      } else {
+        data[i] = white;
+      }
+    }
+
+    if (kind === "brown") {
+      // The walk finishes somewhere other than where it started, and that step
+      // would be an audible click every time the buffer loops. Subtracting a
+      // straight ramp across the whole buffer closes the loop exactly.
+      const drift = data[length - 1] - data[0];
+      for (let i = 0; i < length; i += 1) {
+        data[i] -= drift * (i / (length - 1));
+      }
+    }
+
+    // Normalise by RMS rather than peak. Brown noise has a far higher crest
+    // factor than white, so peak-normalising would leave it sounding much
+    // quieter than the others at the same slider position.
+    let sum = 0;
+    for (let i = 0; i < length; i += 1) sum += data[i] * data[i];
+    const rms = Math.sqrt(sum / length) || 1;
+    const target = 0.25;
+    for (let i = 0; i < length; i += 1) data[i] = (data[i] / rms) * target;
+
+    return buffer;
+  }
+
+  function noiseBuffers() {
+    if (!noiseCache) {
+      noiseCache = { white: buildNoise("white"), brown: buildNoise("brown") };
+    }
+    return noiseCache;
+  }
+
+  // A mild curve rather than a straight line, so the slider tracks how loudness
+  // is actually heard instead of roaring the moment it leaves zero. The 0.28
+  // ceiling keeps the loudest layer stack below full scale even at 100%.
+  function ambientGain() {
+    return Math.pow(settings.ambientVolume / 100, 1.6) * 0.28;
+  }
+
+  function stopAmbientNodes() {
+    if (!ambientNodes) return;
+    const playing = ambientNodes.sources;
+    ambientNodes = null;
+    playing.forEach(function (node) {
+      try { node.stop(); } catch (err) { /* already stopped */ }
+    });
+  }
+
+  function cancelAmbientStop() {
+    if (ambientStopId !== null) {
+      clearTimeout(ambientStopId);
+      ambientStopId = null;
+    }
+  }
+
+  function stopAmbient() {
+    cancelAmbientStop();
+    stopAmbientNodes();
+  }
+
+  function startAmbientNodes() {
+    if (ambientNodes || !audioCtx) return;
+    const spec = AMBIENT[settings.ambient];
+    if (!spec) return;
+
+    try {
+      const master = audioCtx.createGain();
+      master.gain.value = ambientGain() * (spec.trim || 1);
+
+      // Threshold deliberately sits just under 0 dB. Noise is dense, so a
+      // compressor with a low threshold reduces the signal *continuously*
+      // rather than catching peaks - measured, a -3 dB threshold was squashing
+      // the output to about 40% of the intended level. Up here it only engages
+      // on a genuine overshoot, which is exactly what a safety net should do.
+      const limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = -1;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.25;
+      limiter.connect(audioCtx.destination);
+      master.connect(limiter);
+
+      // The tremolo sits between the layers and the master so the slow swell
+      // can be added without the master's own level interfering with its depth.
+      const tremolo = audioCtx.createGain();
+      tremolo.gain.value = 1;
+      tremolo.connect(master);
+
+      const buffers = noiseBuffers();
+      const sources = [];
+
+      spec.layers.forEach(function (layer) {
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffers[layer.noise];
+        source.loop = true;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = layer.type;
+        filter.frequency.value = layer.freq;
+        filter.Q.value = layer.q || 0.7;
+
+        const level = audioCtx.createGain();
+        level.gain.value = layer.level;
+
+        source.connect(filter);
+        filter.connect(level);
+        level.connect(tremolo);
+        source.start();
+        sources.push(source);
+      });
+
+      if (spec.lfo) {
+        const lfo = audioCtx.createOscillator();
+        lfo.frequency.value = spec.lfo.rate;
+        const depth = audioCtx.createGain();
+        depth.gain.value = spec.lfo.depth;
+        lfo.connect(depth);
+        depth.connect(tremolo.gain);
+        lfo.start();
+        sources.push(lfo);
+      }
+
+      ambientNodes = {
+        sources: sources,
+        master: master,
+        limiter: limiter,
+        trim: spec.trim || 1
+      };
+    } catch (err) {
+      ambientNodes = null;
+    }
+  }
+
+  function applyAmbientVolume() {
+    if (!ambientNodes) return;
+    ambientNodes.master.gain.value = ambientGain() * ambientNodes.trim;
+  }
+
+  // The noise is wanted only while a focus session is genuinely running, so
+  // pausing, resetting, finishing, and every break all silence it.
+  function ambientWanted() {
+    return running && mode === "focus" &&
+      settings.ambient !== "off" && settings.ambientVolume > 0;
+  }
+
+  function syncAmbient() {
+    if (ambientWanted()) {
+      cancelAmbientStop();
+      startAmbientNodes();
+    } else {
+      stopAmbient();
+    }
+  }
+
+  // Picking a noise while nothing is running plays it briefly, so the choice
+  // can be heard without committing to a whole session.
+  function previewAmbient() {
+    if (running || settings.ambient === "off" || settings.ambientVolume <= 0) return;
+    ensureAudio();
+    startAmbientNodes();
+    cancelAmbientStop();
+    ambientStopId = setTimeout(function () {
+      ambientStopId = null;
+      if (!ambientWanted()) stopAmbientNodes();
+    }, 4000);
+  }
+
   /* ---------- timer ---------- */
 
   // A pending auto-start must be cancellable, otherwise pressing Reset
@@ -1192,6 +1458,7 @@
     endAt = Date.now() + left * 1000;
     timerId = setInterval(tick, 250);
     render();
+    syncAmbient();
   }
 
   function stop() {
@@ -1199,6 +1466,10 @@
     clearInterval(timerId);
     timerId = null;
     render();
+    // Focus noise belongs to a running focus session and nothing else, so every
+    // path out of a session - pause, reset, finish, skip - silences it here
+    // rather than in each caller.
+    stopAmbient();
   }
 
   function toggle() {
@@ -1267,6 +1538,50 @@
       renderSoundChoice();
     });
   });
+
+  /* ---------- focus noise picker ---------- */
+
+  const ambientButtons = Array.prototype.slice.call(
+    document.querySelectorAll("[data-ambient]")
+  );
+
+  function renderAmbientChoice() {
+    ambientButtons.forEach(function (btn) {
+      btn.setAttribute(
+        "aria-pressed", String(btn.dataset.ambient === settings.ambient)
+      );
+    });
+    el.ambientVolume.value = settings.ambientVolume;
+    // Nothing to turn down when no noise is chosen.
+    el.ambientVolume.disabled = settings.ambient === "off";
+  }
+
+  ambientButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      settings.ambient = btn.dataset.ambient;
+      saveSettings();
+      ensureAudio();
+      renderAmbientChoice();
+      // Tear down whatever was playing first: switching mid-session has to
+      // change the sound, not keep the old one running under the new label.
+      stopAmbientNodes();
+      if (running) syncAmbient(); else previewAmbient();
+    });
+  });
+
+  el.ambientVolume.addEventListener("input", function () {
+    settings.ambientVolume = clampInt(
+      el.ambientVolume.value, 0, 100, settings.ambientVolume
+    );
+    applyAmbientVolume();
+    // Dragging to zero should silence a running session, and dragging back up
+    // should bring it back. During a preview the gain alone is enough.
+    if (settings.ambientVolume === 0) stopAmbient();
+    else if (running) syncAmbient();
+  });
+
+  // Written on release rather than on every pixel of the drag.
+  el.ambientVolume.addEventListener("change", saveSettings);
 
   /* ---------- tags ---------- */
 
@@ -1914,6 +2229,7 @@
     renderTagEditor();
     renderCalTags();
     renderSoundChoice();
+    renderAmbientChoice();
     renderPresets();
     // A backup carries the theme and accent too, so they have to be applied
     // here - otherwise an import silently keeps the old appearance.
@@ -2008,6 +2324,7 @@
   renderTags();
   renderTagEditor();
   renderSoundChoice();
+  renderAmbientChoice();
   renderPresets();
   applyTheme();
   renderThemeChoice();
