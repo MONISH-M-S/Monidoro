@@ -7,12 +7,12 @@
 <style>
   :root{
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
-    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95;
+    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --warn:#b8860b;
   }
   @media (prefers-color-scheme:dark){
     :root{
       --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
-      --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9;
+      --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --warn:#e0b04a;
     }
   }
   *{box-sizing:border-box}
@@ -28,6 +28,12 @@
     margin:0 0 30px; font-size:.78rem; font-weight:600;
     letter-spacing:.18em; text-transform:uppercase; color:var(--mut);
   }
+  .badge{
+    display:inline-block; margin:-20px 0 20px; padding:4px 11px; border-radius:999px;
+    font-size:.66rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+    background:var(--warn); color:#fff;
+  }
+  .badge[hidden]{display:none}
   .dial{position:relative; width:260px; height:260px; margin:0 auto 30px}
   .dial svg{width:100%; height:100%; transform:rotate(-90deg)}
   .track{fill:none; stroke:var(--line); stroke-width:10}
@@ -58,6 +64,7 @@
 <body>
 <main>
   <h1>Focus Timer</h1>
+  <p class="badge" id="badge" hidden>test mode</p>
 
   <div class="dial">
     <svg viewBox="0 0 260 260" aria-hidden="true">
@@ -79,8 +86,19 @@
 </main>
 
 <script>
-  const FOCUS = 25 * 60;
-  const BREAK = 5 * 60;
+  // Durations are in SECONDS. Normal use needs no URL parameters.
+  // For quick testing, override them in the address bar, e.g.
+  //   focus-timer.html?focusSec=10&breakSec=5
+  const params = new URLSearchParams(location.search);
+
+  function duration(name, fallback) {
+    const value = Number(params.get(name));
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
+  }
+
+  const FOCUS = duration("focusSec", 25 * 60);
+  const BREAK = duration("breakSec", 5 * 60);
+  const TEST_MODE = params.has("focusSec") || params.has("breakSec");
   const RING_LENGTH = 2 * Math.PI * 120;
 
   let mode = "focus";
@@ -97,10 +115,12 @@
     ring: document.getElementById("ring"),
     go: document.getElementById("go"),
     reset: document.getElementById("reset"),
-    count: document.getElementById("count")
+    count: document.getElementById("count"),
+    badge: document.getElementById("badge")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
+  el.badge.hidden = !TEST_MODE;
 
   function format(seconds) {
     const m = String(Math.floor(seconds / 60)).padStart(2, "0");
