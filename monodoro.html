@@ -115,6 +115,14 @@
     font-size:.8rem; color:var(--mut); line-height:1.7;
   }
   .stats b{color:var(--ink)}
+  .goal{margin-top:14px; text-align:left; line-height:1.2}
+  .goal-top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px}
+  .bar{display:block; height:6px; border-radius:999px; background:var(--line); overflow:hidden}
+  .bar i{
+    display:block; height:100%; width:0; border-radius:999px;
+    background:var(--accent); transition:width .3s ease, background .4s ease;
+  }
+  #streaks{margin-top:12px}
   .notice{
     margin:14px 0 0; padding:9px 12px; border-radius:8px;
     border:1px solid var(--warn); color:var(--warn);
@@ -232,6 +240,11 @@
         <input type="number" id="cyclesInput" min="2" max="8" step="1" inputmode="numeric">
       </label>
 
+      <label class="field">
+        <span class="field-label">Daily goal (sessions, 0 to hide)</span>
+        <input type="number" id="goalInput" min="0" max="20" step="1" inputmode="numeric">
+      </label>
+
       <div class="field">
         <span class="field-label">Alert sound</span>
         <div class="btn-row" id="soundRow">
@@ -267,6 +280,16 @@
   <div class="stats">
     <div>Today: <b id="todaySessions">0</b> sessions &middot; <b id="todayMinutes">0</b> min</div>
     <div>All time: <b id="count">0</b> sessions</div>
+
+    <div class="goal" id="goal" hidden>
+      <div class="goal-top">
+        <span>Daily goal</span>
+        <span><b id="goalCount">0 / 4</b></span>
+      </div>
+      <span class="bar"><i id="goalBar"></i></span>
+    </div>
+
+    <div id="streaks" hidden></div>
   </div>
 
   <p class="notice" id="notice" hidden></p>
@@ -313,6 +336,7 @@
     breakSec: 5 * 60,
     longBreakSec: 15 * 60,
     cycles: 4,
+    goal: 4,
     sound: "chiptune",
     name: ""
   };
@@ -321,7 +345,8 @@
     focus: { min: 60, max: 180 * 60 },
     break: { min: 60, max: 60 * 60 },
     longBreak: { min: 60, max: 60 * 60 },
-    cycles: { min: 2, max: 8 }
+    cycles: { min: 2, max: 8 },
+    goal: { min: 0, max: 20 }
   };
 
   const MODE_LABELS = {
@@ -479,6 +504,9 @@
       cycles: clampInt(
         source.cycles, LIMITS.cycles.min, LIMITS.cycles.max, DEFAULTS.cycles
       ),
+      goal: clampInt(
+        source.goal, LIMITS.goal.min, LIMITS.goal.max, DEFAULTS.goal
+      ),
       sound: sound,
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name
     };
@@ -570,12 +598,17 @@
     greeting: document.getElementById("greeting"),
     todaySessions: document.getElementById("todaySessions"),
     todayMinutes: document.getElementById("todayMinutes"),
+    goal: document.getElementById("goal"),
+    goalCount: document.getElementById("goalCount"),
+    goalBar: document.getElementById("goalBar"),
+    streaks: document.getElementById("streaks"),
     settingsToggle: document.getElementById("settingsToggle"),
     settingsPanel: document.getElementById("settingsPanel"),
     focusInput: document.getElementById("focusInput"),
     breakInput: document.getElementById("breakInput"),
     longBreakInput: document.getElementById("longBreakInput"),
     cyclesInput: document.getElementById("cyclesInput"),
+    goalInput: document.getElementById("goalInput"),
     exportBtn: document.getElementById("exportBtn"),
     importBtn: document.getElementById("importBtn"),
     eraseBtn: document.getElementById("eraseBtn"),
@@ -643,11 +676,77 @@
     el.greeting.hidden = !name;
   }
 
+  // Walking days one at a time lets Date handle month ends, year ends, and
+  // leap days, instead of hand-rolled arithmetic that quietly breaks in March.
+  function shiftDay(key, delta) {
+    const parts = key.split("-");
+    const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    date.setDate(date.getDate() + delta);
+    return dateKey(date);
+  }
+
+  function hasFocus(key) {
+    return dayRecord(days, key).sessions > 0;
+  }
+
+  // The current streak counts back from today. A day with nothing logged yet
+  // does not break it - otherwise every streak would show zero until the first
+  // session of the morning, which reads like a punishment for waking up.
+  function streakInfo() {
+    const today = dateKey();
+    let cursor = hasFocus(today) ? today : shiftDay(today, -1);
+    let current = 0;
+    while (hasFocus(cursor)) {
+      current += 1;
+      cursor = shiftDay(cursor, -1);
+    }
+
+    // Best streak: the YYYY-MM-DD format sorts chronologically as plain
+    // strings, so the longest unbroken run can be found with one pass.
+    const active = Object.keys(days).filter(hasFocus).sort();
+    let best = 0;
+    let run = 0;
+    let previous = null;
+    active.forEach(function (key) {
+      run = (previous !== null && shiftDay(previous, 1) === key) ? run + 1 : 1;
+      if (run > best) best = run;
+      previous = key;
+    });
+
+    return { current: current, best: Math.max(best, current) };
+  }
+
+  function renderGoal(today) {
+    if (settings.goal <= 0) {
+      el.goal.hidden = true;
+      return;
+    }
+    el.goal.hidden = false;
+    const done = Math.min(today.sessions, settings.goal);
+    el.goalCount.textContent = today.sessions + " / " + settings.goal +
+      (today.sessions >= settings.goal ? " \u2713" : "");
+    el.goalBar.style.width = Math.round((done / settings.goal) * 100) + "%";
+  }
+
+  function renderStreaks() {
+    const info = streakInfo();
+    if (info.best <= 0) {
+      el.streaks.hidden = true;
+      return;
+    }
+    el.streaks.hidden = false;
+    el.streaks.textContent =
+      "Streak " + info.current + (info.current === 1 ? " day" : " days") +
+      " \u00b7 Best " + info.best + (info.best === 1 ? " day" : " days");
+  }
+
   function renderStats() {
     const today = dayRecord(days, dateKey());
     el.todaySessions.textContent = today.sessions;
     el.todayMinutes.textContent = formatMinutes(today.seconds);
     el.count.textContent = completed;
+    renderGoal(today);
+    renderStreaks();
   }
 
   function recordFocusSession(seconds) {
@@ -900,7 +999,7 @@
     settings.longBreakSec = preset.long * 60;
     settings.cycles = preset.cycles;
     saveSettings();
-    syncDurationInputs();
+    syncInputs();
 
     // Same rule as editing a duration by hand: never rewrite a countdown that
     // is already running - the next session picks up the new numbers.
@@ -922,7 +1021,7 @@
 
   /* ---------- settings panel ---------- */
 
-  function syncDurationInputs() {
+  function syncInputs() {
     el.focusInput.value = settings.focusSec >= 60
       ? Math.round(settings.focusSec / 60) : "";
     el.breakInput.value = settings.breakSec >= 60
@@ -930,12 +1029,13 @@
     el.longBreakInput.value = settings.longBreakSec >= 60
       ? Math.round(settings.longBreakSec / 60) : "";
     el.cyclesInput.value = settings.cycles;
+    el.goalInput.value = settings.goal;
   }
 
   // Changing a duration while the clock is stopped should take effect
   // immediately. Mid-session changes wait for the next session, because
   // rewriting a running countdown underneath the user is disorienting.
-  function applyDurations() {
+  function applyInputs() {
     settings.focusSec = clampInt(
       el.focusInput.value, 1, 180, settings.focusSec / 60
     ) * 60;
@@ -948,8 +1048,11 @@
     settings.cycles = clampInt(
       el.cyclesInput.value, LIMITS.cycles.min, LIMITS.cycles.max, settings.cycles
     );
+    settings.goal = clampInt(
+      el.goalInput.value, LIMITS.goal.min, LIMITS.goal.max, settings.goal
+    );
     saveSettings();
-    syncDurationInputs();
+    syncInputs();
 
     if (!running) {
       cancelAuto();
@@ -957,14 +1060,17 @@
       left = total;
       render();
     }
-    // Hand-editing a duration can knock the settings out of any preset.
+    // Hand-editing a value can knock the settings out of any preset.
     renderPresets();
+    // The goal bar and streak line read straight off settings.
+    renderStats();
   }
 
-  el.focusInput.addEventListener("change", applyDurations);
-  el.breakInput.addEventListener("change", applyDurations);
-  el.longBreakInput.addEventListener("change", applyDurations);
-  el.cyclesInput.addEventListener("change", applyDurations);
+  el.focusInput.addEventListener("change", applyInputs);
+  el.breakInput.addEventListener("change", applyInputs);
+  el.longBreakInput.addEventListener("change", applyInputs);
+  el.cyclesInput.addEventListener("change", applyInputs);
+  el.goalInput.addEventListener("change", applyInputs);
 
   el.nameInput.addEventListener("input", function () {
     settings.name = el.nameInput.value.slice(0, 24);
@@ -1176,7 +1282,7 @@
     }
 
     resetToFocus();
-    syncDurationInputs();
+    syncInputs();
     el.nameInput.value = settings.name;
     renderSoundChoice();
     renderPresets();
@@ -1259,11 +1365,12 @@
     el.breakInput.disabled = true;
     el.longBreakInput.disabled = true;
     el.cyclesInput.disabled = true;
+    el.goalInput.disabled = true;
     presetButtons.forEach(function (btn) { btn.disabled = true; });
     el.testHint.hidden = false;
   }
 
-  syncDurationInputs();
+  syncInputs();
   el.nameInput.value = settings.name;
   renderSoundChoice();
   renderPresets();
