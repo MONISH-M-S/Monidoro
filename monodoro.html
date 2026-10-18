@@ -100,9 +100,9 @@
   }
   .field input:focus-visible{outline:3px solid var(--accent); outline-offset:1px}
   .field input:disabled{opacity:.45; cursor:not-allowed}
-  .sound-row{display:flex; gap:6px; flex-wrap:wrap}
-  .sound-row button{min-width:0; flex:1 1 62px; padding:9px 6px; font-size:.76rem}
-  .sound-row button[aria-pressed="true"]{
+  .btn-row{display:flex; gap:6px; flex-wrap:wrap}
+  .btn-row button{min-width:0; flex:1 1 62px; padding:9px 6px; font-size:.76rem}
+  .btn-row button[aria-pressed="true"]{
     background:var(--accent); border-color:var(--accent); color:var(--bg);
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
@@ -200,6 +200,15 @@
     </div>
 
     <div class="settings-panel" id="settingsPanel" hidden>
+      <div class="field">
+        <span class="field-label">Presets</span>
+        <div class="btn-row" id="presetRow">
+          <button type="button" data-preset="classic" title="25 min focus, 5 min break, 15 min long break, 4 per set">Classic 25/5</button>
+          <button type="button" data-preset="deep" title="50 min focus, 10 min break, 25 min long break, 3 per set">Deep 50/10</button>
+          <button type="button" data-preset="ultradian" title="90 min focus, 20 min break, 30 min long break, 2 per set">Ultradian 90/20</button>
+        </div>
+      </div>
+
       <label class="field">
         <span class="field-label">Focus (minutes)</span>
         <input type="number" id="focusInput" min="1" max="180" step="1" inputmode="numeric">
@@ -222,7 +231,7 @@
 
       <div class="field">
         <span class="field-label">Alert sound</span>
-        <div class="sound-row" id="soundRow">
+        <div class="btn-row" id="soundRow">
           <button type="button" data-sound="classic">Classic</button>
           <button type="button" data-sound="chiptune">Chiptune</button>
           <button type="button" data-sound="blip">Blip</button>
@@ -306,6 +315,13 @@
     break: "Break",
     longbreak: "Long break"
   };
+
+  // The classic technique, plus the two variants people most often ask for.
+  const PRESETS = [
+    { id: "classic", focus: 25, brk: 5, long: 15, cycles: 4 },
+    { id: "deep", focus: 50, brk: 10, long: 25, cycles: 3 },
+    { id: "ultradian", focus: 90, brk: 20, long: 30, cycles: 2 }
+  ];
 
   const RING_LENGTH = 2 * Math.PI * 120;
   const AUTO_START_DELAY = 1500;
@@ -789,6 +805,61 @@
     });
   });
 
+  /* ---------- presets ---------- */
+
+  const presetButtons = Array.prototype.slice.call(
+    document.querySelectorAll("[data-preset]")
+  );
+
+  function presetById(id) {
+    let found = null;
+    PRESETS.forEach(function (preset) {
+      if (preset.id === id) found = preset;
+    });
+    return found;
+  }
+
+  // A preset only reads as "selected" while every duration still matches it,
+  // so hand-editing any field afterwards lights none of them.
+  function renderPresets() {
+    presetButtons.forEach(function (btn) {
+      const preset = presetById(btn.dataset.preset);
+      if (!preset) return;
+      const matches =
+        preset.focus * 60 === settings.focusSec &&
+        preset.brk * 60 === settings.breakSec &&
+        preset.long * 60 === settings.longBreakSec &&
+        preset.cycles === settings.cycles;
+      btn.setAttribute("aria-pressed", String(matches));
+    });
+  }
+
+  function applyPreset(preset) {
+    settings.focusSec = preset.focus * 60;
+    settings.breakSec = preset.brk * 60;
+    settings.longBreakSec = preset.long * 60;
+    settings.cycles = preset.cycles;
+    saveSettings();
+    syncDurationInputs();
+
+    // Same rule as editing a duration by hand: never rewrite a countdown that
+    // is already running - the next session picks up the new numbers.
+    if (!running) {
+      cancelAuto();
+      total = durationFor(mode);
+      left = total;
+    }
+    render();
+    renderPresets();
+  }
+
+  presetButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const preset = presetById(btn.dataset.preset);
+      if (preset) applyPreset(preset);
+    });
+  });
+
   /* ---------- settings panel ---------- */
 
   function syncDurationInputs() {
@@ -826,6 +897,8 @@
       left = total;
       render();
     }
+    // Hand-editing a duration can knock the settings out of any preset.
+    renderPresets();
   }
 
   el.focusInput.addEventListener("change", applyDurations);
@@ -971,12 +1044,14 @@
     el.breakInput.disabled = true;
     el.longBreakInput.disabled = true;
     el.cyclesInput.disabled = true;
+    presetButtons.forEach(function (btn) { btn.disabled = true; });
     el.testHint.hidden = false;
   }
 
   syncDurationInputs();
   el.nameInput.value = settings.name;
   renderSoundChoice();
+  renderPresets();
   renderGreeting();
   renderStats();
   render();
