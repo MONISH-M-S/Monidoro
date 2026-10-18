@@ -662,6 +662,12 @@
     render();
   }
 
+  // Wired here, immediately after the two functions they call. In the
+  // previous commit a full-file rewrite dropped these two lines and silently
+  // killed both buttons, so they live next to their functions from now on.
+  el.go.addEventListener("click", toggle);
+  el.reset.addEventListener("click", reset);
+
   /* ---------- sound picker ---------- */
 
   const soundButtons = Array.prototype.slice.call(
