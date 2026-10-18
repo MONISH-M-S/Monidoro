@@ -8,11 +8,13 @@
   :root{
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
     --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --warn:#b8860b;
+    --cal-accent:#3f7d4e;
   }
   @media (prefers-color-scheme:dark){
     :root{
       --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
       --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --warn:#e0b04a;
+      --cal-accent:#6dbb7f;
     }
   }
   *{box-sizing:border-box}
@@ -58,11 +60,13 @@
   }
   button:active{transform:scale(.97)}
   button:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+  button:disabled{opacity:.35; cursor:not-allowed}
   #go{background:var(--accent); border-color:var(--accent); color:var(--bg)}
 
-  .settings{margin-top:24px}
-  .settings-toggle{
-    width:100%; min-width:0; padding:11px 16px; font-size:.82rem;
+  .panels{margin-top:24px}
+  .panel-buttons{display:flex; gap:8px}
+  .panel-buttons button{
+    flex:1 1 0; min-width:0; padding:11px 10px; font-size:.82rem;
     background:transparent; border-style:dashed;
   }
   .settings-panel{
@@ -100,6 +104,54 @@
     font-size:.72rem; line-height:1.35;
   }
   .notice[hidden]{display:none}
+
+  /* ---------- calendar modal ---------- */
+
+  .modal{position:fixed; inset:0; display:grid; place-items:center; padding:18px; z-index:10}
+  .modal[hidden]{display:none}
+  .modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45)}
+  .modal-panel{
+    position:relative; width:100%; max-width:372px;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:18px 16px 16px; box-shadow:0 18px 50px rgba(0,0,0,.28);
+  }
+  .modal-head{display:flex; align-items:center; justify-content:center; gap:8px; padding:0 34px}
+  .modal-head h2{
+    margin:0; flex:0 1 auto; font-size:.82rem; font-weight:700;
+    letter-spacing:.1em; text-transform:uppercase;
+  }
+  .nav-btn{
+    min-width:0; width:32px; height:32px; padding:0; line-height:1;
+    display:grid; place-content:center; font-size:1rem; border-radius:8px;
+  }
+  .cal-close{position:absolute; top:12px; right:12px}
+
+  .cal-weekdays, .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px}
+  .cal-weekdays{margin:14px 0 6px}
+  .cal-weekdays span{
+    text-align:center; font-size:.6rem; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--mut);
+  }
+  .cal-cell{
+    aspect-ratio:1; border-radius:6px; display:grid; place-content:center;
+    font-size:.66rem; font-weight:600; color:var(--mut);
+    border:1px solid transparent;
+  }
+  .cal-cell.blank{background:transparent}
+  .cal-cell.today{border-color:var(--ink)}
+
+  .lvl0{background:var(--line)}
+  .lvl1{background:color-mix(in srgb, var(--cal-accent) 22%, var(--line))}
+  .lvl2{background:color-mix(in srgb, var(--cal-accent) 45%, var(--line))}
+  .lvl3{background:color-mix(in srgb, var(--cal-accent) 70%, var(--line))}
+  .lvl4{background:var(--cal-accent)}
+  .cal-cell.lvl3, .cal-cell.lvl4{color:var(--bg)}
+
+  .cal-legend{
+    display:flex; align-items:center; justify-content:flex-end; gap:5px;
+    margin-top:14px; font-size:.62rem; color:var(--mut);
+  }
+  .cal-legend i{width:12px; height:12px; border-radius:4px; display:block}
 </style>
 </head>
 <body>
@@ -124,9 +176,12 @@
     <button id="reset">Reset</button>
   </div>
 
-  <section class="settings">
-    <button type="button" class="settings-toggle" id="settingsToggle"
-            aria-expanded="false" aria-controls="settingsPanel">Customize</button>
+  <section class="panels">
+    <div class="panel-buttons">
+      <button type="button" id="settingsToggle"
+              aria-expanded="false" aria-controls="settingsPanel">Customize</button>
+      <button type="button" id="calendarOpen">History</button>
+    </div>
 
     <div class="settings-panel" id="settingsPanel" hidden>
       <label class="field">
@@ -168,11 +223,41 @@
   <p class="notice" id="notice" hidden></p>
 </main>
 
+<div class="modal" id="calendarModal" hidden>
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="calTitle">
+    <button type="button" class="nav-btn cal-close" id="calClose" aria-label="Close history">&#10005;</button>
+
+    <div class="modal-head">
+      <button type="button" class="nav-btn" id="calPrev" aria-label="Previous month">&#8249;</button>
+      <h2 id="calTitle">History</h2>
+      <button type="button" class="nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
+    </div>
+
+    <div class="cal-weekdays" aria-hidden="true">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="cal-legend">
+      <span>Less</span>
+      <i class="lvl0"></i><i class="lvl1"></i><i class="lvl2"></i><i class="lvl3"></i><i class="lvl4"></i>
+      <span>More</span>
+    </div>
+
+    <p class="hint" id="calSummary"></p>
+  </div>
+</div>
+
 <script>
   /* ---------- configuration ---------- */
 
   const params = new URLSearchParams(location.search);
   const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
+  const MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
 
   const DEFAULTS = {
     focusSec: 25 * 60,
@@ -206,6 +291,11 @@
     return d.getFullYear() + "-" + month + "-" + day;
   }
 
+  function keyFor(year, monthIndex, day) {
+    return year + "-" + String(monthIndex + 1).padStart(2, "0") + "-" +
+      String(day).padStart(2, "0");
+  }
+
   // Rounds to whole minutes, but never shows "0 min" for real work.
   function formatMinutes(seconds) {
     if (!(seconds > 0)) return "0";
@@ -217,6 +307,18 @@
     const n = Math.round(Number(value));
     if (!Number.isFinite(n)) return fallback;
     return Math.min(max, Math.max(min, n));
+  }
+
+  // Pulls a day record out of the history, ignoring anything malformed.
+  function dayRecord(map, key) {
+    const entry = map[key];
+    if (entry && typeof entry === "object") {
+      return {
+        sessions: Number(entry.sessions) || 0,
+        seconds: Number(entry.seconds) || 0
+      };
+    }
+    return { sessions: 0, seconds: 0 };
   }
 
   /* ---------- storage ---------- */
@@ -342,6 +444,8 @@
   let days = loadDays();
   let audioCtx = null;
   let selectedSound = settings.sound;
+  let calYear = new Date().getFullYear();
+  let calMonth = new Date().getMonth();
 
   const el = {
     time: document.getElementById("time"),
@@ -360,7 +464,15 @@
     focusInput: document.getElementById("focusInput"),
     breakInput: document.getElementById("breakInput"),
     nameInput: document.getElementById("nameInput"),
-    testHint: document.getElementById("testHint")
+    testHint: document.getElementById("testHint"),
+    calendarOpen: document.getElementById("calendarOpen"),
+    calendarModal: document.getElementById("calendarModal"),
+    calClose: document.getElementById("calClose"),
+    calPrev: document.getElementById("calPrev"),
+    calNext: document.getElementById("calNext"),
+    calTitle: document.getElementById("calTitle"),
+    calGrid: document.getElementById("calGrid"),
+    calSummary: document.getElementById("calSummary")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
@@ -388,19 +500,8 @@
     el.greeting.hidden = !name;
   }
 
-  function todayEntry() {
-    const entry = days[dateKey()];
-    if (entry && typeof entry === "object") {
-      return {
-        sessions: Number(entry.sessions) || 0,
-        seconds: Number(entry.seconds) || 0
-      };
-    }
-    return { sessions: 0, seconds: 0 };
-  }
-
   function renderStats() {
-    const today = todayEntry();
+    const today = dayRecord(days, dateKey());
     el.todaySessions.textContent = today.sessions;
     el.todayMinutes.textContent = formatMinutes(today.seconds);
     el.count.textContent = completed;
@@ -408,7 +509,7 @@
 
   function recordFocusSession(seconds) {
     const key = dateKey();
-    const entry = todayEntry();
+    const entry = dayRecord(days, key);
     entry.sessions += 1;
     entry.seconds += seconds;
     days[key] = entry;
@@ -633,8 +734,123 @@
     el.settingsToggle.textContent = willOpen ? "Hide settings" : "Customize";
   });
 
-  el.go.addEventListener("click", toggle);
-  el.reset.addEventListener("click", reset);
+  /* ---------- calendar ---------- */
+
+  // Intensity is relative to the best day on record, so the grid stays
+  // readable whether you focus 25 minutes or 5 hours a day.
+  function bestDaySeconds() {
+    let best = 0;
+    Object.keys(days).forEach(function (key) {
+      const record = dayRecord(days, key);
+      if (record.seconds > best) best = record.seconds;
+    });
+    return best;
+  }
+
+  function levelFor(seconds, best) {
+    if (!(seconds > 0)) return 0;
+    if (!(best > 0)) return 1;
+    const ratio = seconds / best;
+    if (ratio > 0.75) return 4;
+    if (ratio > 0.5) return 3;
+    if (ratio > 0.25) return 2;
+    return 1;
+  }
+
+  function describeDay(day, record) {
+    const label = day + " " + MONTH_NAMES[calMonth];
+    if (record.sessions === 0) return label + ": no focus";
+    return label + ": " + record.sessions +
+      (record.sessions === 1 ? " session, " : " sessions, ") +
+      formatMinutes(record.seconds) + " min";
+  }
+
+  function renderCalendar() {
+    const best = bestDaySeconds();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const leadingBlanks = new Date(calYear, calMonth, 1).getDay();
+    const todayKey = dateKey();
+
+    el.calTitle.textContent = MONTH_NAMES[calMonth] + " " + calYear;
+
+    // Every value interpolated here is a number, so building the grid as a
+    // string is safe - no user text ever reaches it.
+    let cells = "";
+    let index;
+    for (index = 0; index < leadingBlanks; index += 1) {
+      cells += '<div class="cal-cell blank" aria-hidden="true"></div>';
+    }
+
+    let monthSeconds = 0;
+    let monthSessions = 0;
+    let activeDays = 0;
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const key = keyFor(calYear, calMonth, day);
+      const record = dayRecord(days, key);
+      if (record.seconds > 0) {
+        activeDays += 1;
+        monthSeconds += record.seconds;
+        monthSessions += record.sessions;
+      }
+      const level = levelFor(record.seconds, best);
+      const classes = "cal-cell lvl" + level + (key === todayKey ? " today" : "");
+      cells += '<div class="' + classes + '" title="' +
+        describeDay(day, record) + '">' + day + "</div>";
+    }
+
+    el.calGrid.innerHTML = cells;
+
+    el.calSummary.textContent = monthSeconds > 0
+      ? activeDays + (activeDays === 1 ? " day" : " days") + " · " +
+        monthSessions + (monthSessions === 1 ? " session" : " sessions") +
+        " · " + formatMinutes(monthSeconds) + " min focused"
+      : "No focus recorded this month yet.";
+
+    // Nothing to see beyond the current month.
+    const now = new Date();
+    el.calNext.disabled =
+      (calYear === now.getFullYear() && calMonth === now.getMonth());
+  }
+
+  function openCalendar() {
+    const now = new Date();
+    calYear = now.getFullYear();
+    calMonth = now.getMonth();
+    renderCalendar();
+    el.calendarModal.hidden = false;
+    el.calClose.focus();
+  }
+
+  function closeCalendar() {
+    el.calendarModal.hidden = true;
+    el.calendarOpen.focus();
+  }
+
+  function stepMonth(delta) {
+    calMonth += delta;
+    if (calMonth < 0) {
+      calMonth = 11;
+      calYear -= 1;
+    } else if (calMonth > 11) {
+      calMonth = 0;
+      calYear += 1;
+    }
+    renderCalendar();
+  }
+
+  el.calendarOpen.addEventListener("click", openCalendar);
+  el.calClose.addEventListener("click", closeCalendar);
+  el.calPrev.addEventListener("click", function () { stepMonth(-1); });
+  el.calNext.addEventListener("click", function () { stepMonth(1); });
+
+  el.calendarModal.addEventListener("click", function (event) {
+    if (event.target.dataset.close) closeCalendar();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !el.calendarModal.hidden) closeCalendar();
+  });
 
   /* ---------- init ---------- */
 
