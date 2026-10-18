@@ -106,6 +106,9 @@
     background:var(--accent); border-color:var(--accent); color:var(--bg);
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
+  .hint[data-state="ok"]{color:var(--accent)}
+  .hint[data-state="err"]{color:var(--warn)}
+  #eraseBtn{color:var(--warn)}
 
   .stats{
     margin-top:26px; padding-top:18px; border-top:1px solid var(--line);
@@ -243,6 +246,17 @@
         <span class="field-label">Your name</span>
         <input type="text" id="nameInput" maxlength="24" placeholder="optional">
       </label>
+
+      <div class="field">
+        <span class="field-label">Your data</span>
+        <div class="btn-row">
+          <button type="button" id="exportBtn">Export</button>
+          <button type="button" id="importBtn">Import</button>
+          <button type="button" id="eraseBtn">Erase history</button>
+        </div>
+        <p class="hint" id="dataStatus" hidden></p>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
 
       <p class="hint" id="testHint" hidden>
         Test mode: durations come from the address bar.
@@ -423,14 +437,53 @@
   const STORE_COMPLETED = "monodoro.completed";
   const STORE_DAYS = "monodoro.days";
 
+  const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+  function sanitizeCount(raw) {
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  }
+
   function loadCount() {
-    const value = Number(store.get(STORE_COMPLETED));
-    return Number.isFinite(value) && value >= 0 ? value : 0;
+    return sanitizeCount(store.get(STORE_COMPLETED));
   }
 
   // Settings may be missing, corrupt, hand-edited, or written by an older
   // version. Every field is validated individually so one bad value cannot
   // take out the rest.
+  //
+  // Used for both localStorage AND imported backup files. A file the user
+  // picked is no more trustworthy than storage, so it gets the same treatment.
+  function sanitizeSettings(raw) {
+    const source = (raw && typeof raw === "object" && !Array.isArray(raw))
+      ? raw
+      : {};
+
+    // Migration: the sound used to live under its own key.
+    const legacySound = store.get(STORE_SOUND_LEGACY);
+    const sound = SOUND_KEYS.indexOf(source.sound) >= 0
+      ? source.sound
+      : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
+
+    return {
+      focusSec: clampInt(
+        source.focusSec, LIMITS.focus.min, LIMITS.focus.max, DEFAULTS.focusSec
+      ),
+      breakSec: clampInt(
+        source.breakSec, LIMITS.break.min, LIMITS.break.max, DEFAULTS.breakSec
+      ),
+      longBreakSec: clampInt(
+        source.longBreakSec, LIMITS.longBreak.min, LIMITS.longBreak.max,
+        DEFAULTS.longBreakSec
+      ),
+      cycles: clampInt(
+        source.cycles, LIMITS.cycles.min, LIMITS.cycles.max, DEFAULTS.cycles
+      ),
+      sound: sound,
+      name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name
+    };
+  }
+
   function loadSettings() {
     let parsed = null;
     try {
@@ -438,44 +491,40 @@
     } catch (err) {
       parsed = null;
     }
-    const raw = (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-      ? parsed
-      : {};
-
-    // Migration: the sound used to live under its own key.
-    const legacySound = store.get(STORE_SOUND_LEGACY);
-    const sound = SOUND_KEYS.indexOf(raw.sound) >= 0
-      ? raw.sound
-      : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
-
-    return {
-      focusSec: clampInt(
-        raw.focusSec, LIMITS.focus.min, LIMITS.focus.max, DEFAULTS.focusSec
-      ),
-      breakSec: clampInt(
-        raw.breakSec, LIMITS.break.min, LIMITS.break.max, DEFAULTS.breakSec
-      ),
-      longBreakSec: clampInt(
-        raw.longBreakSec, LIMITS.longBreak.min, LIMITS.longBreak.max,
-        DEFAULTS.longBreakSec
-      ),
-      cycles: clampInt(
-        raw.cycles, LIMITS.cycles.min, LIMITS.cycles.max, DEFAULTS.cycles
-      ),
-      sound: sound,
-      name: typeof raw.name === "string" ? raw.name.slice(0, 24) : DEFAULTS.name
-    };
+    return sanitizeSettings(parsed);
   }
 
-  // Never trust stored JSON - anything unexpected becomes an empty history
-  // rather than a broken page.
+  // Never trust stored JSON - anything unexpected is dropped rather than
+  // breaking the page. Keys must look like dates, values must be finite
+  // numbers, and a day with no sessions and no seconds is not worth keeping.
+  function sanitizeDays(raw) {
+    const clean = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return clean;
+
+    Object.keys(raw).forEach(function (key) {
+      if (!DAY_KEY_PATTERN.test(key)) return;
+      const entry = raw[key];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
+
+      const sessions = Math.round(Number(entry.sessions));
+      const seconds = Math.round(Number(entry.seconds));
+      if (!Number.isFinite(sessions) || !Number.isFinite(seconds)) return;
+      if (sessions <= 0 && seconds <= 0) return;
+
+      clean[key] = {
+        sessions: Math.max(0, sessions),
+        seconds: Math.max(0, seconds)
+      };
+    });
+
+    return clean;
+  }
+
   function loadDays() {
     const stored = store.get(STORE_DAYS);
     if (!stored) return {};
     try {
-      const parsed = JSON.parse(stored);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-      return parsed;
+      return sanitizeDays(JSON.parse(stored));
     } catch (err) {
       return {};
     }
@@ -527,6 +576,11 @@
     breakInput: document.getElementById("breakInput"),
     longBreakInput: document.getElementById("longBreakInput"),
     cyclesInput: document.getElementById("cyclesInput"),
+    exportBtn: document.getElementById("exportBtn"),
+    importBtn: document.getElementById("importBtn"),
+    eraseBtn: document.getElementById("eraseBtn"),
+    importFile: document.getElementById("importFile"),
+    dataStatus: document.getElementById("dataStatus"),
     nameInput: document.getElementById("nameInput"),
     testHint: document.getElementById("testHint"),
     calendarOpen: document.getElementById("calendarOpen"),
@@ -748,7 +802,9 @@
     running ? stop() : start();
   }
 
-  function reset() {
+  // Back to a clean, stopped focus session, sitting at the full duration.
+  // Shared by Reset, import, and erase so those three cannot drift apart.
+  function resetToFocus() {
     cancelAuto();
     stop();
     mode = "focus";
@@ -756,6 +812,10 @@
     total = settings.focusSec;
     left = settings.focusSec;
     render();
+  }
+
+  function reset() {
+    resetToFocus();
   }
 
   // Ending a break early is a normal part of the technique - sometimes the
@@ -1036,6 +1096,161 @@
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && !el.calendarModal.hidden) closeCalendar();
   });
+
+  /* ---------- backup and restore ---------- */
+
+  const BACKUP_VERSION = 1;
+
+  function showDataStatus(message, state) {
+    el.dataStatus.textContent = message;
+    el.dataStatus.hidden = false;
+    if (state) {
+      el.dataStatus.setAttribute("data-state", state);
+    } else {
+      el.dataStatus.removeAttribute("data-state");
+    }
+  }
+
+  function buildBackup() {
+    return {
+      app: "monodoro",
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      completed: completed,
+      settings: settings,
+      days: days
+    };
+  }
+
+  // A Blob plus a synthetic <a download> needs no server, so this works from a
+  // plain file:// page as well. The object URL is revoked afterwards so the
+  // blob is not pinned in memory for the life of the tab.
+  function exportBackup() {
+    let url = null;
+    try {
+      const json = JSON.stringify(buildBackup(), null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "monodoro-backup-" + dateKey() + ".json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      showDataStatus(
+        "Backup downloaded: " + Object.keys(days).length + " days of history.",
+        "ok"
+      );
+    } catch (err) {
+      showDataStatus("This browser would not start the download.", "err");
+    } finally {
+      if (url) {
+        // Revoke late - revoking immediately can cancel the download.
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      }
+    }
+  }
+
+  // Everything from the file is re-validated, then the app is put back into a
+  // clean stopped state. Returns null when the file is not a usable backup.
+  function applyBackup(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    if (!raw.days && raw.completed === undefined) return null;
+
+    days = sanitizeDays(raw.days);
+    completed = sanitizeCount(raw.completed);
+
+    store.set(STORE_DAYS, JSON.stringify(days));
+    store.set(STORE_COMPLETED, String(completed));
+
+    // Settings are optional in a backup, and are re-validated either way.
+    if (raw.settings) {
+      const incoming = sanitizeSettings(raw.settings);
+      Object.keys(incoming).forEach(function (key) {
+        settings[key] = incoming[key];
+      });
+      selectedSound = settings.sound;
+      saveSettings();
+    }
+
+    resetToFocus();
+    syncDurationInputs();
+    el.nameInput.value = settings.name;
+    renderSoundChoice();
+    renderPresets();
+    renderGreeting();
+    renderStats();
+
+    return { days: Object.keys(days).length, sessions: completed };
+  }
+
+  function handleImportFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function () {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(String(reader.result));
+      } catch (err) {
+        showDataStatus("That file is not valid JSON.", "err");
+        return;
+      }
+
+      const result = applyBackup(parsed);
+      if (!result) {
+        showDataStatus("That file is not a Monodoro backup.", "err");
+        return;
+      }
+
+      showDataStatus(
+        "Restored " + result.days + (result.days === 1 ? " day" : " days") +
+        " of history and " + result.sessions + " sessions.",
+        "ok"
+      );
+    };
+    reader.onerror = function () {
+      showDataStatus("Could not read that file.", "err");
+    };
+    reader.readAsText(file);
+  }
+
+  // Erasing keeps durations, sound, and name on purpose - the history is the
+  // thing you actually cannot recreate.
+  function eraseHistory() {
+    const confirmed = window.confirm(
+      "Erase all focus history and the session count?\n\n" +
+      "Your durations, sound, and name are kept. This cannot be undone, so " +
+      "export a backup first if you are not sure."
+    );
+    if (!confirmed) return;
+
+    days = {};
+    completed = 0;
+    store.set(STORE_DAYS, "{}");
+    store.set(STORE_COMPLETED, "0");
+
+    resetToFocus();
+    renderStats();
+    showDataStatus("History erased.", "ok");
+  }
+
+  el.exportBtn.addEventListener("click", exportBackup);
+
+  el.importBtn.addEventListener("click", function () {
+    el.importFile.click();
+  });
+
+  el.importFile.addEventListener("change", function () {
+    const file = el.importFile.files && el.importFile.files[0];
+    handleImportFile(file);
+    // Clearing the value lets the same file be picked again later.
+    el.importFile.value = "";
+  });
+
+  el.eraseBtn.addEventListener("click", eraseHistory);
 
   /* ---------- init ---------- */
 
