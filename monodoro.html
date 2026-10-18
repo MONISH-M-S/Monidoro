@@ -70,6 +70,12 @@
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
   footer{margin-top:26px; font-size:.8rem; color:var(--mut)}
   footer b{color:var(--ink)}
+  .notice{
+    margin:14px 0 0; padding:9px 12px; border-radius:8px;
+    border:1px solid var(--warn); color:var(--warn);
+    font-size:.72rem; line-height:1.35;
+  }
+  .notice[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -105,6 +111,7 @@
   </div>
 
   <footer>Completed sessions: <b id="count">0</b></footer>
+  <p class="notice" id="notice" hidden></p>
 </main>
 
 <script>
@@ -206,7 +213,8 @@
     go: document.getElementById("go"),
     reset: document.getElementById("reset"),
     count: document.getElementById("count"),
-    badge: document.getElementById("badge")
+    badge: document.getElementById("badge"),
+    notice: document.getElementById("notice")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
@@ -404,7 +412,14 @@
   renderSoundChoice();
   render();
 
+  // Tell the user up front when saving is impossible, rather than letting
+  // them discover it by losing a session.
   if (!store.available()) {
+    el.notice.textContent =
+      "Heads up: this browser is blocking local storage, so your session " +
+      "count and sound choice will reset when the page reloads. Opening " +
+      "the app from a web address instead of a file fixes this.";
+    el.notice.hidden = false;
     console.warn(
       "Monodoro: persistent storage is unavailable here, so progress will " +
       "reset when the page reloads."
