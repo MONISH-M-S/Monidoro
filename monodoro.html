@@ -7,14 +7,14 @@
 <style>
   :root{
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
-    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --warn:#b8860b;
-    --cal-accent:#3f7d4e;
+    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --longbreak:#5b4fa8;
+    --warn:#b8860b; --cal-accent:#3f7d4e;
   }
   @media (prefers-color-scheme:dark){
     :root{
       --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
-      --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --warn:#e0b04a;
-      --cal-accent:#6dbb7f;
+      --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
+      --warn:#e0b04a; --cal-accent:#6dbb7f;
     }
   }
   *{box-sizing:border-box}
@@ -25,6 +25,7 @@
     transition:background .4s ease;
   }
   body.is-break{--accent:var(--break)}
+  body.is-longbreak{--accent:var(--longbreak)}
   main{width:100%; max-width:400px; text-align:center}
   h1{
     margin:0 0 30px; font-size:.78rem; font-weight:600;
@@ -51,6 +52,13 @@
     font-variant-numeric:tabular-nums; letter-spacing:-.02em;
   }
   #mode{font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--mut)}
+  .cycles{display:flex; gap:7px; justify-content:center; min-height:9px; margin-top:5px}
+  .cycle-dot{
+    width:9px; height:9px; border-radius:50%; border:1px solid var(--accent);
+    background:transparent;
+    transition:background .25s ease, border-color .4s ease;
+  }
+  .cycle-dot.done{background:var(--accent)}
   .controls{display:flex; gap:10px; justify-content:center}
   button{
     font:inherit; font-weight:600; cursor:pointer; min-width:114px; padding:12px 20px;
@@ -168,6 +176,7 @@
     <div class="readout">
       <div id="time">25:00</div>
       <div id="mode">Focus</div>
+      <div class="cycles" id="cycles" role="img" aria-label=""></div>
     </div>
   </div>
 
@@ -192,6 +201,16 @@
       <label class="field">
         <span class="field-label">Break (minutes)</span>
         <input type="number" id="breakInput" min="1" max="60" step="1" inputmode="numeric">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Long break (minutes)</span>
+        <input type="number" id="longBreakInput" min="1" max="60" step="1" inputmode="numeric">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Sessions per set</span>
+        <input type="number" id="cyclesInput" min="2" max="8" step="1" inputmode="numeric">
       </label>
 
       <div class="field">
@@ -262,13 +281,23 @@
   const DEFAULTS = {
     focusSec: 25 * 60,
     breakSec: 5 * 60,
+    longBreakSec: 15 * 60,
+    cycles: 4,
     sound: "chiptune",
     name: ""
   };
 
   const LIMITS = {
     focus: { min: 60, max: 180 * 60 },
-    break: { min: 60, max: 60 * 60 }
+    break: { min: 60, max: 60 * 60 },
+    longBreak: { min: 60, max: 60 * 60 },
+    cycles: { min: 2, max: 8 }
+  };
+
+  const MODE_LABELS = {
+    focus: "Focus",
+    break: "Break",
+    longbreak: "Long break"
   };
 
   const RING_LENGTH = 2 * Math.PI * 120;
@@ -403,6 +432,13 @@
       breakSec: clampInt(
         raw.breakSec, LIMITS.break.min, LIMITS.break.max, DEFAULTS.breakSec
       ),
+      longBreakSec: clampInt(
+        raw.longBreakSec, LIMITS.longBreak.min, LIMITS.longBreak.max,
+        DEFAULTS.longBreakSec
+      ),
+      cycles: clampInt(
+        raw.cycles, LIMITS.cycles.min, LIMITS.cycles.max, DEFAULTS.cycles
+      ),
       sound: sound,
       name: typeof raw.name === "string" ? raw.name.slice(0, 24) : DEFAULTS.name
     };
@@ -444,6 +480,7 @@
   let days = loadDays();
   let audioCtx = null;
   let selectedSound = settings.sound;
+  let cycleCount = 0;
   let calYear = new Date().getFullYear();
   let calMonth = new Date().getMonth();
 
@@ -451,6 +488,7 @@
     time: document.getElementById("time"),
     mode: document.getElementById("mode"),
     ring: document.getElementById("ring"),
+    cycles: document.getElementById("cycles"),
     go: document.getElementById("go"),
     reset: document.getElementById("reset"),
     count: document.getElementById("count"),
@@ -463,6 +501,8 @@
     settingsPanel: document.getElementById("settingsPanel"),
     focusInput: document.getElementById("focusInput"),
     breakInput: document.getElementById("breakInput"),
+    longBreakInput: document.getElementById("longBreakInput"),
+    cyclesInput: document.getElementById("cyclesInput"),
     nameInput: document.getElementById("nameInput"),
     testHint: document.getElementById("testHint"),
     calendarOpen: document.getElementById("calendarOpen"),
@@ -484,14 +524,38 @@
     return m + ":" + s;
   }
 
+  // The configured length of any session kind, in one place.
+  function durationFor(which) {
+    if (which === "focus") return settings.focusSec;
+    if (which === "longbreak") return settings.longBreakSec;
+    return settings.breakSec;
+  }
+
+  // Progress through the current set. A finished set stays fully lit while the
+  // long break runs, so the four dots mean "set complete", not "reset".
+  function renderCycles() {
+    const filled = mode === "longbreak" ? settings.cycles : cycleCount;
+    let dots = "";
+    for (let i = 0; i < settings.cycles; i += 1) {
+      dots += '<span class="cycle-dot' + (i < filled ? " done" : "") + '"></span>';
+    }
+    el.cycles.innerHTML = dots;
+    el.cycles.setAttribute(
+      "aria-label",
+      filled + " of " + settings.cycles + " focus sessions done in this set"
+    );
+  }
+
   function render() {
     const text = format(left);
     el.time.textContent = text;
-    el.mode.textContent = mode === "focus" ? "Focus" : "Break";
+    el.mode.textContent = MODE_LABELS[mode];
     el.go.textContent = running ? "Pause" : "Start";
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
+    document.body.classList.toggle("is-longbreak", mode === "longbreak");
     document.title = (running ? text + " - " : "") + "Monodoro";
+    renderCycles();
   }
 
   function renderGreeting() {
@@ -617,13 +681,19 @@
       store.set(STORE_COMPLETED, String(completed));
       recordFocusSession(settings.focusSec);
       renderStats();
-      mode = "break";
-      total = settings.breakSec;
+
+      // The Pomodoro rule: every Nth break is a long one. Without this the
+      // rest is always five minutes and the technique is not actually being
+      // followed - you just tire out by mid-afternoon.
+      cycleCount += 1;
+      mode = cycleCount >= settings.cycles ? "longbreak" : "break";
     } else {
+      // A completed long break closes the set.
+      if (mode === "longbreak") cycleCount = 0;
       mode = "focus";
-      total = settings.focusSec;
     }
 
+    total = durationFor(mode);
     left = total;
     render();
     autoId = setTimeout(function () {
@@ -657,14 +727,15 @@
     cancelAuto();
     stop();
     mode = "focus";
+    cycleCount = 0;
     total = settings.focusSec;
     left = settings.focusSec;
     render();
   }
 
-  // Wired here, immediately after the two functions they call. In the
-  // previous commit a full-file rewrite dropped these two lines and silently
-  // killed both buttons, so they live next to their functions from now on.
+  // Wired here, immediately after the two functions, rather than in a distant
+  // listeners block - an earlier full-file rewrite dropped these two lines and
+  // silently killed both buttons.
   el.go.addEventListener("click", toggle);
   el.reset.addEventListener("click", reset);
 
@@ -701,6 +772,9 @@
       ? Math.round(settings.focusSec / 60) : "";
     el.breakInput.value = settings.breakSec >= 60
       ? Math.round(settings.breakSec / 60) : "";
+    el.longBreakInput.value = settings.longBreakSec >= 60
+      ? Math.round(settings.longBreakSec / 60) : "";
+    el.cyclesInput.value = settings.cycles;
   }
 
   // Changing a duration while the clock is stopped should take effect
@@ -713,12 +787,18 @@
     settings.breakSec = clampInt(
       el.breakInput.value, 1, 60, settings.breakSec / 60
     ) * 60;
+    settings.longBreakSec = clampInt(
+      el.longBreakInput.value, 1, 60, settings.longBreakSec / 60
+    ) * 60;
+    settings.cycles = clampInt(
+      el.cyclesInput.value, LIMITS.cycles.min, LIMITS.cycles.max, settings.cycles
+    );
     saveSettings();
     syncDurationInputs();
 
     if (!running) {
       cancelAuto();
-      total = mode === "focus" ? settings.focusSec : settings.breakSec;
+      total = durationFor(mode);
       left = total;
       render();
     }
@@ -726,6 +806,8 @@
 
   el.focusInput.addEventListener("change", applyDurations);
   el.breakInput.addEventListener("change", applyDurations);
+  el.longBreakInput.addEventListener("change", applyDurations);
+  el.cyclesInput.addEventListener("change", applyDurations);
 
   el.nameInput.addEventListener("input", function () {
     settings.name = el.nameInput.value.slice(0, 24);
@@ -863,6 +945,8 @@
   if (TEST_MODE) {
     el.focusInput.disabled = true;
     el.breakInput.disabled = true;
+    el.longBreakInput.disabled = true;
+    el.cyclesInput.disabled = true;
     el.testHint.hidden = false;
   }
 
