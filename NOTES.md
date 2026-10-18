@@ -1,21 +1,28 @@
 # Monidoro — working notes and handoff
 
 > **Picking this up in a fresh session?** Read this file, then skim
-> `monodoro.html`, then run `git log --oneline`. Then just say
+> `monidoro.html`, then run `git log --oneline`. Then just say
 > *"continue with feature 7"* and you are fully caught up. Nothing is lost.
 
-A single-file pomodoro timer. `monodoro.html` is the entire app — no build step,
+A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
 `file://` and to work offline.
 
 ## Running it
 
-- Double-click `monodoro.html`, **or**
+- Double-click `monidoro.html`, **or**
 - `python -m http.server 8777 --bind 127.0.0.1`, then open
-  <http://127.0.0.1:8777/monodoro.html>
+  <http://127.0.0.1:8777/monidoro.html>
 
 Testing with the local server is easier to automate, but `file://` is the real
 target and must keep working.
+
+The file was called `monodoro.html` until the app was renamed. If a browser
+stored its data against the old *file path* rather than against `file://` as a
+whole, opening the renamed file starts with an empty history — recover with the
+backup export/import. Whether `file://` storage is scoped per-file cannot be
+observed from automation, so it is untested; the old filename is still in git
+history if a copy is ever needed.
 
 ## What exists today
 
