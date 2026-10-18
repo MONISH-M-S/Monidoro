@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus Timer</title>
+<style>
+  :root{
+    --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
+    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
+      --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100svh; display:grid; place-items:center; padding:24px;
+    background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    transition:background .4s ease;
+  }
+  body.is-break{--accent:var(--break)}
+  main{width:100%; max-width:380px; text-align:center}
+  h1{
+    margin:0 0 30px; font-size:.78rem; font-weight:600;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--mut);
+  }
+  .dial{position:relative; width:260px; height:260px; margin:0 auto 30px}
+  .dial svg{width:100%; height:100%; transform:rotate(-90deg)}
+  .track{fill:none; stroke:var(--line); stroke-width:10}
+  .prog{
+    fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round;
+    transition:stroke .4s ease;
+  }
+  .readout{position:absolute; inset:0; display:grid; place-content:center; gap:6px}
+  #time{
+    font-size:3.6rem; font-weight:700; line-height:1;
+    font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+  }
+  #mode{font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--mut)}
+  .controls{display:flex; gap:10px; justify-content:center}
+  button{
+    font:inherit; font-weight:600; cursor:pointer; min-width:114px; padding:12px 20px;
+    border:1px solid var(--line); border-radius:10px;
+    background:var(--card); color:var(--ink);
+    transition:transform .08s ease;
+  }
+  button:active{transform:scale(.97)}
+  button:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+  #go{background:var(--accent); border-color:var(--accent); color:var(--bg)}
+  footer{margin-top:28px; font-size:.8rem; color:var(--mut)}
+  footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Focus Timer</h1>
+
+  <div class="dial">
+    <svg viewBox="0 0 260 260" aria-hidden="true">
+      <circle class="track" cx="130" cy="130" r="120"></circle>
+      <circle class="prog" id="ring" cx="130" cy="130" r="120"></circle>
+    </svg>
+    <div class="readout">
+      <div id="time">25:00</div>
+      <div id="mode">Focus</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="go">Start</button>
+    <button id="reset">Reset</button>
+  </div>
+
+  <footer>Completed sessions: <b id="count">0</b></footer>
+</main>
+
+<script>
+  const FOCUS = 25 * 60;
+  const BREAK = 5 * 60;
+  const RING_LENGTH = 2 * Math.PI * 120;
+
+  let mode = "focus";
+  let total = FOCUS;
+  let left = FOCUS;
+  let running = false;
+  let timerId = null;
+  let completed = 0;
+
+  const el = {
+    time: document.getElementById("time"),
+    mode: document.getElementById("mode"),
+    ring: document.getElementById("ring"),
+    go: document.getElementById("go"),
+    reset: document.getElementById("reset"),
+    count: document.getElementById("count")
+  };
+
+  el.ring.style.strokeDasharray = RING_LENGTH;
+
+  function format(seconds) {
+    const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const s = String(seconds % 60).padStart(2, "0");
+    return m + ":" + s;
+  }
+
+  function render() {
+    const text = format(left);
+    el.time.textContent = text;
+    el.mode.textContent = mode === "focus" ? "Focus" : "Break";
+    el.go.textContent = running ? "Pause" : "Start";
+    el.count.textContent = completed;
+    el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
+    document.body.classList.toggle("is-break", mode === "break");
+    document.title = (running ? text + " - " : "") + "Focus Timer";
+  }
+
+  function tick() {
+    left -= 1;
+    if (left <= 0) {
+      left = 0;
+      render();
+      finish();
+      return;
+    }
+    render();
+  }
+
+  function finish() {
+    stop();
+    if (mode === "focus") {
+      completed += 1;
+      mode = "break";
+      total = BREAK;
+    } else {
+      mode = "focus";
+      total = FOCUS;
+    }
+    left = total;
+    render();
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    timerId = setInterval(tick, 1000);
+    render();
+  }
+
+  function stop() {
+    running = false;
+    clearInterval(timerId);
+    timerId = null;
+    render();
+  }
+
+  function toggle() {
+    running ? stop() : start();
+  }
+
+  function reset() {
+    stop();
+    mode = "focus";
+    total = FOCUS;
+    left = FOCUS;
+    render();
+  }
+
+  el.go.addEventListener("click", toggle);
+  el.reset.addEventListener("click", reset);
+
+  render();
+</script>
+</body>
+</html>

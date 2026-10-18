@@ -1,0 +1,17 @@
+# Operating system / editor junk
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+
+# Dependencies and build output
+# (not needed yet for a single HTML file, but this is where they'd go
+#  if the project grows a build step or pulls in packages)
+node_modules/
+dist/
+build/
+
+# Local secrets - NEVER commit these
+.env
+.env.local
