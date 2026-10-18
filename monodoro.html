@@ -17,12 +17,16 @@
       --warn:#e0b04a; --cal-accent:#6dbb7f;
     }
   }
+  /* Deliberately NO transition on anything whose value comes from a custom
+     property (background:var(--bg), stroke:var(--accent), ...). Chromium gets
+     such a transition permanently stuck at the old value rather than animating
+     it, which froze the timer ring at the focus colour so it never turned blue
+     on a break. An instant colour change is the right trade. */
   *{box-sizing:border-box}
   body{
     margin:0; min-height:100svh; display:grid; place-items:center; padding:24px;
     background:var(--bg); color:var(--ink);
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    transition:background .4s ease;
   }
   body.is-break{--accent:var(--break)}
   body.is-longbreak{--accent:var(--longbreak)}
@@ -44,7 +48,6 @@
   .track{fill:none; stroke:var(--line); stroke-width:10}
   .prog{
     fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round;
-    transition:stroke .4s ease;
   }
   .readout{position:absolute; inset:0; display:grid; place-content:center; gap:6px}
   #time{
@@ -56,7 +59,6 @@
   .cycle-dot{
     width:9px; height:9px; border-radius:50%; border:1px solid var(--accent);
     background:transparent;
-    transition:background .25s ease, border-color .4s ease;
   }
   .cycle-dot.done{background:var(--accent)}
   .controls{display:flex; gap:10px; justify-content:center}
@@ -120,7 +122,7 @@
   .bar{display:block; height:6px; border-radius:999px; background:var(--line); overflow:hidden}
   .bar i{
     display:block; height:100%; width:0; border-radius:999px;
-    background:var(--accent); transition:width .3s ease, background .4s ease;
+    background:var(--accent); transition:width .3s ease;
   }
   #streaks{margin-top:12px}
   .notice{
