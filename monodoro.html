@@ -28,6 +28,8 @@
     margin:0 0 30px; font-size:.78rem; font-weight:600;
     letter-spacing:.18em; text-transform:uppercase; color:var(--mut);
   }
+  .greeting{margin:-16px 0 22px; font-size:.95rem; font-weight:600}
+  .greeting[hidden]{display:none}
   .badge{
     display:inline-block; margin:-20px 0 20px; padding:4px 11px; border-radius:999px;
     font-size:.66rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
@@ -57,17 +59,36 @@
   button:active{transform:scale(.97)}
   button:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
   #go{background:var(--accent); border-color:var(--accent); color:var(--bg)}
-  .sounds{margin-top:30px}
-  .sounds-label{
-    display:block; margin-bottom:8px; font-size:.66rem; font-weight:600;
-    letter-spacing:.16em; text-transform:uppercase; color:var(--mut);
+
+  .settings{margin-top:24px}
+  .settings-toggle{
+    width:100%; min-width:0; padding:11px 16px; font-size:.82rem;
+    background:transparent; border-style:dashed;
   }
-  .sound-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap}
-  .sound-row button{min-width:0; flex:1 1 0; padding:9px 8px; font-size:.78rem}
+  .settings-panel{
+    margin-top:12px; padding:18px 16px; text-align:left;
+    border:1px solid var(--line); border-radius:10px; background:var(--card);
+  }
+  .settings-panel[hidden]{display:none}
+  .field{display:block; margin-bottom:18px}
+  .field:last-of-type{margin-bottom:0}
+  .field-label{
+    display:block; margin-bottom:7px; font-size:.66rem; font-weight:600;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--mut);
+  }
+  .field input{
+    width:100%; padding:9px 11px; font:inherit; border-radius:8px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  }
+  .field input:focus-visible{outline:3px solid var(--accent); outline-offset:1px}
+  .field input:disabled{opacity:.45; cursor:not-allowed}
+  .sound-row{display:flex; gap:6px; flex-wrap:wrap}
+  .sound-row button{min-width:0; flex:1 1 62px; padding:9px 6px; font-size:.76rem}
   .sound-row button[aria-pressed="true"]{
     background:var(--accent); border-color:var(--accent); color:var(--bg);
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
+
   .stats{
     margin-top:26px; padding-top:18px; border-top:1px solid var(--line);
     font-size:.8rem; color:var(--mut); line-height:1.7;
@@ -85,6 +106,7 @@
 <main>
   <h1>Monodoro</h1>
   <p class="badge" id="badge" hidden>test mode</p>
+  <p class="greeting" id="greeting" hidden></p>
 
   <div class="dial">
     <svg viewBox="0 0 260 260" aria-hidden="true">
@@ -102,16 +124,41 @@
     <button id="reset">Reset</button>
   </div>
 
-  <div class="sounds">
-    <span class="sounds-label">Alert sound</span>
-    <div class="sound-row" id="soundRow">
-      <button type="button" data-sound="classic">Classic</button>
-      <button type="button" data-sound="chiptune">Chiptune</button>
-      <button type="button" data-sound="blip">Blip</button>
-      <button type="button" data-sound="bell">Bell</button>
+  <section class="settings">
+    <button type="button" class="settings-toggle" id="settingsToggle"
+            aria-expanded="false" aria-controls="settingsPanel">Customize</button>
+
+    <div class="settings-panel" id="settingsPanel" hidden>
+      <label class="field">
+        <span class="field-label">Focus (minutes)</span>
+        <input type="number" id="focusInput" min="1" max="180" step="1" inputmode="numeric">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Break (minutes)</span>
+        <input type="number" id="breakInput" min="1" max="60" step="1" inputmode="numeric">
+      </label>
+
+      <div class="field">
+        <span class="field-label">Alert sound</span>
+        <div class="sound-row" id="soundRow">
+          <button type="button" data-sound="classic">Classic</button>
+          <button type="button" data-sound="chiptune">Chiptune</button>
+          <button type="button" data-sound="blip">Blip</button>
+          <button type="button" data-sound="bell">Bell</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Your name</span>
+        <input type="text" id="nameInput" maxlength="24" placeholder="optional">
+      </label>
+
+      <p class="hint" id="testHint" hidden>
+        Test mode: durations come from the address bar.
+      </p>
     </div>
-    <p class="hint">Tap a sound to hear it and set it as your alert</p>
-  </div>
+  </section>
 
   <div class="stats">
     <div>Today: <b id="todaySessions">0</b> sessions &middot; <b id="todayMinutes">0</b> min</div>
@@ -124,23 +171,29 @@
 <script>
   /* ---------- configuration ---------- */
 
-  // Durations are in SECONDS. Normal use needs no URL parameters.
-  // For quick testing, override them in the address bar, e.g.
-  //   monodoro.html?focusSec=10&breakSec=5
   const params = new URLSearchParams(location.search);
+  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
 
-  function duration(name, fallback) {
-    const value = Number(params.get(name));
-    return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
-  }
+  const DEFAULTS = {
+    focusSec: 25 * 60,
+    breakSec: 5 * 60,
+    sound: "chiptune",
+    name: ""
+  };
 
-  const FOCUS = duration("focusSec", 25 * 60);
-  const BREAK = duration("breakSec", 5 * 60);
-  const TEST_MODE = params.has("focusSec") || params.has("breakSec");
+  const LIMITS = {
+    focus: { min: 60, max: 180 * 60 },
+    break: { min: 60, max: 60 * 60 }
+  };
+
   const RING_LENGTH = 2 * Math.PI * 120;
   const AUTO_START_DELAY = 1500;
-  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
-  const DEFAULT_SOUND = "chiptune";
+
+  // URL parameters exist only for testing. They override settings for this
+  // page load and are never written to storage.
+  const urlFocus = Number(params.get("focusSec"));
+  const urlBreak = Number(params.get("breakSec"));
+  const TEST_MODE = (urlFocus > 0) || (urlBreak > 0);
 
   /* ---------- helpers ---------- */
 
@@ -158,6 +211,12 @@
     if (!(seconds > 0)) return "0";
     const minutes = Math.round(seconds / 60);
     return minutes < 1 ? "<1" : String(minutes);
+  }
+
+  function clampInt(value, min, max, fallback) {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
   }
 
   /* ---------- storage ---------- */
@@ -205,8 +264,9 @@
     };
   })();
 
+  const STORE_SETTINGS = "monodoro.settings";
+  const STORE_SOUND_LEGACY = "monodoro.sound";
   const STORE_COMPLETED = "monodoro.completed";
-  const STORE_SOUND = "monodoro.sound";
   const STORE_DAYS = "monodoro.days";
 
   function loadCount() {
@@ -214,19 +274,45 @@
     return Number.isFinite(value) && value >= 0 ? value : 0;
   }
 
-  function loadSound() {
-    const value = store.get(STORE_SOUND);
-    return SOUND_KEYS.indexOf(value) >= 0 ? value : DEFAULT_SOUND;
+  // Settings may be missing, corrupt, hand-edited, or written by an older
+  // version. Every field is validated individually so one bad value cannot
+  // take out the rest.
+  function loadSettings() {
+    let parsed = null;
+    try {
+      parsed = JSON.parse(store.get(STORE_SETTINGS) || "null");
+    } catch (err) {
+      parsed = null;
+    }
+    const raw = (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      ? parsed
+      : {};
+
+    // Migration: the sound used to live under its own key.
+    const legacySound = store.get(STORE_SOUND_LEGACY);
+    const sound = SOUND_KEYS.indexOf(raw.sound) >= 0
+      ? raw.sound
+      : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
+
+    return {
+      focusSec: clampInt(
+        raw.focusSec, LIMITS.focus.min, LIMITS.focus.max, DEFAULTS.focusSec
+      ),
+      breakSec: clampInt(
+        raw.breakSec, LIMITS.break.min, LIMITS.break.max, DEFAULTS.breakSec
+      ),
+      sound: sound,
+      name: typeof raw.name === "string" ? raw.name.slice(0, 24) : DEFAULTS.name
+    };
   }
 
-  // Never trust stored JSON - it can be corrupt, hand-edited, or from an
-  // older version of the app. Anything unexpected becomes an empty history
+  // Never trust stored JSON - anything unexpected becomes an empty history
   // rather than a broken page.
   function loadDays() {
-    const raw = store.get(STORE_DAYS);
-    if (!raw) return {};
+    const stored = store.get(STORE_DAYS);
+    if (!stored) return {};
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(stored);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
       return parsed;
     } catch (err) {
@@ -236,9 +322,18 @@
 
   /* ---------- state ---------- */
 
+  const settings = loadSettings();
+
+  if (urlFocus > 0) settings.focusSec = Math.round(urlFocus);
+  if (urlBreak > 0) settings.breakSec = Math.round(urlBreak);
+
+  function saveSettings() {
+    store.set(STORE_SETTINGS, JSON.stringify(settings));
+  }
+
   let mode = "focus";
-  let total = FOCUS;
-  let left = FOCUS;
+  let total = settings.focusSec;
+  let left = settings.focusSec;
   let running = false;
   let timerId = null;
   let endAt = 0;
@@ -246,7 +341,7 @@
   let completed = loadCount();
   let days = loadDays();
   let audioCtx = null;
-  let selectedSound = loadSound();
+  let selectedSound = settings.sound;
 
   const el = {
     time: document.getElementById("time"),
@@ -257,8 +352,15 @@
     count: document.getElementById("count"),
     badge: document.getElementById("badge"),
     notice: document.getElementById("notice"),
+    greeting: document.getElementById("greeting"),
     todaySessions: document.getElementById("todaySessions"),
-    todayMinutes: document.getElementById("todayMinutes")
+    todayMinutes: document.getElementById("todayMinutes"),
+    settingsToggle: document.getElementById("settingsToggle"),
+    settingsPanel: document.getElementById("settingsPanel"),
+    focusInput: document.getElementById("focusInput"),
+    breakInput: document.getElementById("breakInput"),
+    nameInput: document.getElementById("nameInput"),
+    testHint: document.getElementById("testHint")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
@@ -275,10 +377,15 @@
     el.time.textContent = text;
     el.mode.textContent = mode === "focus" ? "Focus" : "Break";
     el.go.textContent = running ? "Pause" : "Start";
-    el.count.textContent = completed;
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
     document.title = (running ? text + " - " : "") + "Monodoro";
+  }
+
+  function renderGreeting() {
+    const name = settings.name.trim();
+    el.greeting.textContent = name ? "Hey, " + name : "";
+    el.greeting.hidden = !name;
   }
 
   function todayEntry() {
@@ -407,13 +514,13 @@
     if (mode === "focus") {
       completed += 1;
       store.set(STORE_COMPLETED, String(completed));
-      recordFocusSession(FOCUS);
+      recordFocusSession(settings.focusSec);
       renderStats();
       mode = "break";
-      total = BREAK;
+      total = settings.breakSec;
     } else {
       mode = "focus";
-      total = FOCUS;
+      total = settings.focusSec;
     }
 
     left = total;
@@ -449,8 +556,8 @@
     cancelAuto();
     stop();
     mode = "focus";
-    total = FOCUS;
-    left = FOCUS;
+    total = settings.focusSec;
+    left = settings.focusSec;
     render();
   }
 
@@ -472,27 +579,85 @@
   soundButtons.forEach(function (btn) {
     btn.addEventListener("click", function () {
       selectedSound = btn.dataset.sound;
-      store.set(STORE_SOUND, selectedSound);
+      settings.sound = selectedSound;
+      saveSettings();
       ensureAudio();
       playSound(selectedSound);
       renderSoundChoice();
     });
   });
 
+  /* ---------- settings panel ---------- */
+
+  function syncDurationInputs() {
+    el.focusInput.value = settings.focusSec >= 60
+      ? Math.round(settings.focusSec / 60) : "";
+    el.breakInput.value = settings.breakSec >= 60
+      ? Math.round(settings.breakSec / 60) : "";
+  }
+
+  // Changing a duration while the clock is stopped should take effect
+  // immediately. Mid-session changes wait for the next session, because
+  // rewriting a running countdown underneath the user is disorienting.
+  function applyDurations() {
+    settings.focusSec = clampInt(
+      el.focusInput.value, 1, 180, settings.focusSec / 60
+    ) * 60;
+    settings.breakSec = clampInt(
+      el.breakInput.value, 1, 60, settings.breakSec / 60
+    ) * 60;
+    saveSettings();
+    syncDurationInputs();
+
+    if (!running) {
+      cancelAuto();
+      total = mode === "focus" ? settings.focusSec : settings.breakSec;
+      left = total;
+      render();
+    }
+  }
+
+  el.focusInput.addEventListener("change", applyDurations);
+  el.breakInput.addEventListener("change", applyDurations);
+
+  el.nameInput.addEventListener("input", function () {
+    settings.name = el.nameInput.value.slice(0, 24);
+    saveSettings();
+    renderGreeting();
+  });
+
+  el.settingsToggle.addEventListener("click", function () {
+    const willOpen = el.settingsPanel.hidden;
+    el.settingsPanel.hidden = !willOpen;
+    el.settingsToggle.setAttribute("aria-expanded", String(willOpen));
+    el.settingsToggle.textContent = willOpen ? "Hide settings" : "Customize";
+  });
+
   el.go.addEventListener("click", toggle);
   el.reset.addEventListener("click", reset);
 
+  /* ---------- init ---------- */
+
+  if (TEST_MODE) {
+    el.focusInput.disabled = true;
+    el.breakInput.disabled = true;
+    el.testHint.hidden = false;
+  }
+
+  syncDurationInputs();
+  el.nameInput.value = settings.name;
   renderSoundChoice();
-  render();
+  renderGreeting();
   renderStats();
+  render();
 
   // Tell the user up front when saving is impossible, rather than letting
   // them discover it by losing a session.
   if (!store.available()) {
     el.notice.textContent =
       "Heads up: this browser is blocking local storage, so your session " +
-      "count and sound choice will reset when the page reloads. Opening " +
-      "the app from a web address instead of a file fixes this.";
+      "count and settings will reset when the page reloads. Opening the " +
+      "app from a web address instead of a file fixes this.";
     el.notice.hidden = false;
     console.warn(
       "Monodoro: persistent storage is unavailable here, so progress will " +
