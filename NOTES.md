@@ -6,13 +6,16 @@
 >
 > **The order for new work is the list under "Remaining work"**, and it is kept
 > in the order it was agreed. Done: the contrast pass over the backdrops and the
-> panels (14), the extra focus noises (15) and the history statistics (16). What
-> the contrast pass turned up but could not fix — the accent swatches and the tag
-> colours, which are mid-tones — is written up there with its measurements; it is
-> the one item on that list that is a repair rather than a new slice, and it comes
-> first. After that: the next slice of the task list. Nothing there is started —
-> the tree is clean, and every feature described below was committed and pushed as
-> it was finished.
+> panels (14), the extra focus noises (15) and the history statistics (16).
+>
+> Next, and the owner has asked for **all of it**, one commit at a time and
+> without asking again in between: the accent-and-tag palette fix (the only repair
+> on the list, and it comes first), then the four task-list slices in the order
+> they are written down — subtasks, reordering on touch, a due date or "today"
+> list, a tag per task. The palette fix already has its analysis written up with
+> it, down to the luminance bounds and candidate tones, so it can be started
+> straight away. Nothing there is started — the tree is clean, and every feature
+> described below was committed and pushed as it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -290,8 +293,9 @@ What is worth doing next, in the order it was raised:
   and in the light theme that reads 3.28:1, 3.65:1, 3.53:1, 2.52:1, 3.13:1 and
   2.71:1 respectively — #d08a3a, "Amber", is the worst, and it is also a tag
   colour, so the pressed tag chips and the fourth calendar heat step inherit the
-  same failure. In the dark theme they mostly pass (5.2:1 to 6.5:1) because
-  `--bg` is near-black there, and that shape is the fix: each swatch needs a
+  same failure. In the dark theme they pass too, though not as comfortably as
+  first written down: Blue sits at 4.51:1 there, the tightest of the six, against
+  5.24-6.53 for the rest. The shape is the fix: each swatch needs a
   light-theme tone and a dark-theme tone, the way the default accent already has
   one (`#3b7748` / `#6dbb7f`), or the label has to be chosen by measuring the
   colour it sits on. Both are the same idea — keep each accent out of the middle
@@ -304,6 +308,41 @@ What is worth doing next, in the order it was raised:
   Study pressed in the light theme that chip measures 3.65:1 *in situ* — the same
   number as the swatch, found again in a different part of the app, which is the
   argument for fixing the palette rather than the six places it shows up.
+- **That repair, worked out, so it can be started rather than re-derived.** Both
+  labels imply a luminance bound, because `--bg` is the label on every one of
+  these surfaces: in the light theme an accent must have a luminance of at most
+  0.157 for `--bg` on it to reach 4.5:1, and in the dark theme at least 0.204.
+  The six swatches sit at 0.27, 0.20, 0.21, 0.34, 0.25 and 0.29 — all inside the
+  band that fails in the light theme, and only just above the line in the dark
+  one. (Computed label ratios: light 2.96, 3.65, 3.53, 2.52, 3.14, 2.70; dark
+  5.57, 4.51, 4.67, 6.53, 5.24, 6.09 — the in-situ 3.65 for Blue matched the
+  computed figure exactly, which is why these can be trusted for the rest.)
+  Swapping the label to `--ink` instead is **not** enough, and that is worth
+  recording because it is the cheap fix someone will reach for first: in the light
+  theme the six then read 5.21, 4.22, 4.37, 6.11, 4.90 and 5.70, so Blue and
+  Purple still fail and the colours themselves have to move.
+  So: a pair per swatch, keyed by the hex that is already stored, which means
+  **nothing in settings changes and no migration is needed** — the stored hex
+  stays the swatch's identity and `applyTheme()` resolves it to the tone for the
+  theme it is drawing. Keep each one's hue and move its lightness until it clears
+  5:1 against that theme's own `--bg` (headroom over the 4.5 the app requires, the
+  same bar the built-in pair sits on). Scaled evenly in RGB that gives light tones
+  `#367349`, `#346aa2`, `#705aa9`, `#8c5d27`, `#9f4a75`, `#29726c`, and dark tones
+  `#4388d0` and `#9073d9` for Blue and Purple, with Green, Amber, Pink and Teal
+  already clear at 5.57-6.53:1 and so free to stay as they are.
+  The same table resolves a *tag* colour, which is the point of doing it as a
+  lookup: the two default tags are two of the six (Study `#3f80c4`, Work
+  `#d08a3a`), so the pressed tag chips, the History dialog's filter chips and the
+  calendar's filtered heat steps all get the right tone from the one place. The
+  swatch buttons in Customize should preview the tone they will actually apply,
+  in the theme they will apply it in.
+  Two things not to forget when measuring the result. The contrast pass ran with
+  `settings.accent = ""`, so nothing it measured was an *accent-coloured line*:
+  with a swatch selected `--accent` is also used as text (`.hint[data-state="ok"]`,
+  the task row's pick / done / count glyphs), and those have to be measured with
+  each accent selected, not just with the default. And the calendar's third step
+  must be re-measured with a tag filter active, because the filter is what puts a
+  tag colour into `--cal-accent` in the first place.
 - **The next slice of the task list**, in the order it is most likely to be
   wanted:
   - **Subtasks**, i.e. an indent level, which is the one Notion idea this
