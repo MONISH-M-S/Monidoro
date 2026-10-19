@@ -6,13 +6,13 @@
 >
 > **The order for new work is the list under "Remaining work"**, and it is kept
 > in the order it was agreed. Done: the contrast pass over the backdrops and the
-> panels (14) and the extra focus noises (15). What the contrast pass turned up
-> but could not fix — the accent swatches and the tag colours, which are
-> mid-tones — is written up there with its measurements; it is the one item on
-> that list that is a repair rather than a new slice, and it comes first. After
-> that: deeper history statistics, then the next slice of the task list. Nothing
-> there is started — the tree is clean, and every feature described below was
-> committed and pushed as it was finished.
+> panels (14), the extra focus noises (15) and the history statistics (16). What
+> the contrast pass turned up but could not fix — the accent swatches and the tag
+> colours, which are mid-tones — is written up there with its measurements; it is
+> the one item on that list that is a repair rather than a new slice, and it comes
+> first. After that: the next slice of the task list. Nothing there is started —
+> the tree is clean, and every feature described below was committed and pushed as
+> it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -66,7 +66,15 @@ and pushed.
 - Daily goal progress bar (minutes) and current / best streaks
 - Four synthesised alert sounds via Web Audio, with no files of their own
 - Optional profile name, shown as a greeting
-- Per-day history, month heatmap with prev/next navigation
+- Per-day history: a month heatmap with prev/next navigation, and under it eight
+  weekly bars with the eight-week average drawn across them, the averages for the
+  same window spelled out, and where the time went by tag — each tag with the
+  eight weeks before this one as its comparison, because a total with nothing to
+  compare it to is a number rather than a trend. The bars, the averages and the
+  tag rows all follow the dialog's tag filter, so a filter that changed the grid
+  but not the numbers under it can never happen. The window is fixed (the eight
+  weeks ending with this one) and the month arrows do not move it, which is why
+  the heading says which window it is rather than leaving you to work it out
 - Backup export to JSON, import with full re-validation, erase history
 - Theme: system / light / dark, plus an accent colour picker
 - Background: five built-in backdrops (plain, dunes, aurora, grid, space) drawn
@@ -266,7 +274,7 @@ Nothing here is half-finished. Everything asked for so far is in and described
 above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
 files of your own (11), the bundled lofi track (12), the task list (13), the
-contrast pass (14) and the extra focus noises (15).
+contrast pass (14), the extra focus noises (15) and the history statistics (16).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -290,9 +298,12 @@ What is worth doing next, in the order it was raised:
   of the luminance range in the theme it is used in — and both are more than a
   colour tweak, which is why the pass left this alone and wrote it down instead.
   The calendar's third step has the same fault for those accents (4.01:1 with
-  Amber in the dark theme) and will be fixed by the same change.
-- **Deeper history statistics**: weekly bars, averages and per-tag trends on top
-  of the heatmap that is already there.
+  Amber in the dark theme) and will be fixed by the same change. The history
+  statistics gave the same problem a second, more visible home: the History
+  dialog's own tag filter paints a pressed chip in its tag's colour, and with
+  Study pressed in the light theme that chip measures 3.65:1 *in situ* — the same
+  number as the swatch, found again in a different part of the app, which is the
+  argument for fixing the palette rather than the six places it shows up.
 - **The next slice of the task list**, in the order it is most likely to be
   wanted:
   - **Subtasks**, i.e. an indent level, which is the one Notion idea this
@@ -659,8 +670,12 @@ by accident:
     red produces `NaN`. And because every comparison against `NaN` is false, a
     `NaN` element is never counted as a failure: it looks like a pass. That is
     exactly how the tinted task row and the calendar's mixed steps stayed
-    invisible until the parser was fixed. Assert on the finding, not on the
-    absence of a finding.
+    invisible until the parser was fixed. (c) An overlay that scrolls on its own
+    has a fold too: the body-sized raster samples body coordinates, so anything
+    below the *dialog's* fold — which is where the tag rows under the statistics
+    were — has no sample inside the raster and is skipped just as silently.
+    Scroll the dialog to the bottom and scan again, or measure the whole thing in
+    two passes. Assert on the finding, not on the absence of a finding.
 
 ## How features were verified
 
@@ -783,6 +798,37 @@ by up to a third within a single pass, so a four-second periodicity *is* in the
 signal. Nobody has reported hearing it, and the fix is the obvious one —
 lengthen the buffers — but that changes rain, brown and cafe as much as it
 changes the new three, so it is written down here rather than done in passing.
+
+The history statistics were checked against arithmetic done by hand rather than
+against themselves. Eleven seeded days spanning the window and the eight weeks
+before it — both tags, one deliberately untagged day, one empty week — were read
+back out of the DOM: eight bars whose heights are their share of the best week,
+labels in the calendar's own convention ("30 Aug", then 6 Sep, 13, 20, 27, then
+"4 Oct", 11, 18), the average line at 52% of the peak where 373 min over eight
+weeks puts it against a best week of 90 min, and the tag rows whose shares add to
+100% (59 / 34 / 7) and whose
+deltas land on the figures you get with a pencil: Study 30 min → 220 min is
++633%, Work 60 min → 128 min is +114%, untagged has nothing before it and says
+"new". Then the same block under a tag filter: the heading becomes "Last 8 weeks ·
+Work", the bars recolour to that tag, the weeks recompute (20, 10, 83, 15 min),
+and the tag list is one row at 100%. Two negatives were checked as well: the
+month arrows change the heading to August 2026 and leave every number alone, and
+an empty history hides the whole block rather than showing eight bars of zero.
+The first run also caught a real bug that a shape-check would have passed — the
+per-day and per-session averages were divided in seconds and printed as minutes,
+so the line read "2489 min a day"; the numbers have to be read, not just counted.
+
+The new text was measured like the rest of the pass, which meant discovering trap
+(c) in gotcha 29: the tag rows sit under the dialog's own scroll fold, so the
+first scan never sampled them and said nothing about them. With the dialog
+scrolled to the bottom they read 7.08:1 in the light theme and 7.69:1 in the dark
+— `--mut` on the card, the same pair as every other secondary line. The only
+failure anywhere in the dialog is the pre-existing pressed tag chip, which is the
+deferred palette item and now has a second home on record. Layout was checked at
+320, 360, 414 and 1200 px: no overflow of the page or of the dialog's scroller,
+bars 24 px wide at the smallest, no tag value clipped — and with the content
+scrolled to its end the close button has not moved, which is the whole reason the
+dialog's content scrolls instead of the panel.
 
 Keep that bar. It has already paid for itself twice.
 

@@ -432,6 +432,56 @@
   }
   .cal-close{position:absolute; top:12px; right:12px}
 
+  /* The History dialog grew past a short screen once the statistics below the
+     grid were added. Its content scrolls rather than the panel, so the close
+     button stays where it is instead of travelling with the content. */
+  #calendarModal .modal-panel{max-height:calc(100vh - 36px); display:flex; flex-direction:column}
+  .modal-scroll{flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain}
+
+  /* ---------- history statistics ---------- */
+
+  .stats{margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
+  .stats-head{
+    margin:0 0 9px; font-size:.6rem; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--mut);
+  }
+  .stats-tracks{position:relative; display:grid; grid-template-columns:repeat(8,1fr); gap:6px}
+  .bar-track{
+    height:64px; display:flex; flex-direction:column; justify-content:flex-end;
+    border-bottom:1px solid var(--line);
+  }
+  .bar-track i{display:block; border-radius:3px 3px 0 0; background:var(--stats-bar, var(--accent))}
+  .bar-track i.empty{background:var(--line)}
+  /* The eight-week average, drawn where it falls: the one line that says whether a
+     tall week was a good week or the new normal. */
+  .stats-avg{position:absolute; left:0; right:0; border-top:1px dashed var(--mut); pointer-events:none}
+  .stats-avg span{
+    position:absolute; right:0; bottom:2px; padding:0 3px; border-radius:3px;
+    background:var(--card); color:var(--mut); font-size:.6rem;
+  }
+  .stats-labels{display:grid; grid-template-columns:repeat(8,1fr); gap:6px; margin-top:5px}
+  .stats-labels span{
+    text-align:center; font-size:.58rem; color:var(--mut);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .stats-tags{margin-top:11px}
+  .tag-stat + .tag-stat{margin-top:9px}
+  .tag-stat-head{display:flex; align-items:center; gap:6px}
+  .tag-dot{flex:none; width:8px; height:8px; border-radius:50%; background:var(--tag)}
+  .tag-stat-name{
+    flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font-size:.72rem; font-weight:600; color:var(--ink);
+  }
+  .tag-stat-value{
+    flex:none; font-size:.68rem; color:var(--mut); font-variant-numeric:tabular-nums;
+  }
+  .tag-stat-bar{
+    display:block; height:6px; margin-top:5px; border-radius:3px;
+    background:var(--line); overflow:hidden;
+  }
+  .tag-stat-bar i{display:block; height:100%; border-radius:3px; background:var(--tag)}
+
   .cal-weekdays, .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px}
   .cal-weekdays{margin:14px 0 6px}
   .cal-weekdays span{
@@ -840,26 +890,41 @@
   <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="calTitle">
     <button type="button" class="nav-btn cal-close" id="calClose" aria-label="Close history">&#10005;</button>
 
-    <div class="modal-head">
-      <button type="button" class="nav-btn" id="calPrev" aria-label="Previous month">&#8249;</button>
-      <h2 id="calTitle">History</h2>
-      <button type="button" class="nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
+    <!-- The dialog grew past a short screen once the statistics were added, so its
+         content scrolls on its own: the panel itself must not scroll, or the close
+         button would travel with it. -->
+    <div class="modal-scroll">
+      <div class="modal-head">
+        <button type="button" class="nav-btn" id="calPrev" aria-label="Previous month">&#8249;</button>
+        <h2 id="calTitle">History</h2>
+        <button type="button" class="nav-btn" id="calNext" aria-label="Next month">&#8250;</button>
+      </div>
+
+      <div class="cal-tags" id="calTagRow" role="group" aria-label="Filter history by tag" hidden></div>
+
+      <div class="cal-weekdays" aria-hidden="true">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+
+      <div class="cal-legend">
+        <span>Less</span>
+        <i class="lvl0"></i><i class="lvl1"></i><i class="lvl2"></i><i class="lvl3"></i><i class="lvl4"></i>
+        <span>More</span>
+      </div>
+
+      <p class="hint" id="calSummary"></p>
+
+      <section class="stats" id="calStats" hidden>
+        <h3 class="stats-head" id="statsWeeksHead"></h3>
+        <div class="stats-tracks" id="statsTracks"></div>
+        <div class="stats-labels" id="statsLabels" aria-hidden="true"></div>
+        <p class="hint" id="statsAverages"></p>
+        <h3 class="stats-head" id="statsTagsHead">By tag</h3>
+        <div class="stats-tags" id="statsTags"></div>
+        <p class="hint" id="statsTagsHint">Each share is of the whole window, and the change compares with the eight weeks before it.</p>
+      </section>
     </div>
-
-    <div class="cal-tags" id="calTagRow" role="group" aria-label="Filter history by tag" hidden></div>
-
-    <div class="cal-weekdays" aria-hidden="true">
-      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
-    </div>
-    <div class="cal-grid" id="calGrid"></div>
-
-    <div class="cal-legend">
-      <span>Less</span>
-      <i class="lvl0"></i><i class="lvl1"></i><i class="lvl2"></i><i class="lvl3"></i><i class="lvl4"></i>
-      <span>More</span>
-    </div>
-
-    <p class="hint" id="calSummary"></p>
   </div>
 </div>
 
@@ -1510,6 +1575,14 @@
     calGrid: document.getElementById("calGrid"),
     calTagRow: document.getElementById("calTagRow"),
     calSummary: document.getElementById("calSummary"),
+    calStats: document.getElementById("calStats"),
+    statsWeeksHead: document.getElementById("statsWeeksHead"),
+    statsTracks: document.getElementById("statsTracks"),
+    statsLabels: document.getElementById("statsLabels"),
+    statsAverages: document.getElementById("statsAverages"),
+    statsTagsHead: document.getElementById("statsTagsHead"),
+    statsTags: document.getElementById("statsTags"),
+    statsTagsHint: document.getElementById("statsTagsHint"),
     tasksOpen: document.getElementById("tasksOpen"),
     tasksModal: document.getElementById("tasksModal"),
     tasksClose: document.getElementById("tasksClose"),
@@ -3697,6 +3770,238 @@
       formatMinutes(record.seconds) + " min";
   }
 
+  /* ---------- history statistics ---------- */
+
+  // Eight whole weeks ending with the week today is in, so the newest bar is a
+  // week in progress rather than a week that has not happened yet. Weeks start on
+  // Sunday, the day the calendar header above starts on.
+  const STATS_WEEKS = 8;
+
+  function weekStart(key) {
+    const parts = key.split("-");
+    const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return shiftDay(key, -date.getDay());
+  }
+
+  function shortDay(key) {
+    const parts = key.split("-");
+    return Number(parts[2]) + " " + MONTH_NAMES[Number(parts[1]) - 1].slice(0, 3);
+  }
+
+  // Totals over an inclusive run of days, under the dialog's own tag filter, so
+  // the statistics and the grid above them always agree about what counts.
+  function rangeTotals(from, to) {
+    const totals = { seconds: 0, sessions: 0, days: 0, best: 0, bestKey: "" };
+    for (let key = from; key <= to; key = shiftDay(key, 1)) {
+      const record = dayRecord(days, key);
+      const seconds = tagSeconds(record, calTag);
+      if (!(seconds > 0)) continue;
+      totals.seconds += seconds;
+      totals.sessions += tagSessions(record, calTag);
+      totals.days += 1;
+      if (seconds > totals.best) {
+        totals.best = seconds;
+        totals.bestKey = key;
+      }
+    }
+    return totals;
+  }
+
+  // Seconds per tag over an inclusive run of days, and the run's totals, so a
+  // tag's share can be of everything focused rather than of a remainder that
+  // happens to have been tagged.
+  function tagTotals(from, to) {
+    const byTag = {};
+    let total = 0;
+    let tagged = 0;
+    for (let key = from; key <= to; key = shiftDay(key, 1)) {
+      const record = dayRecord(days, key);
+      total += record.seconds;
+      Object.keys(record.byTag).forEach(function (id) {
+        const bucket = record.byTag[id];
+        const seconds = bucket ? (Number(bucket.seconds) || 0) : 0;
+        if (seconds > 0) {
+          byTag[id] = (byTag[id] || 0) + seconds;
+          tagged += seconds;
+        }
+      });
+    }
+    return { byTag: byTag, total: total, tagged: tagged };
+  }
+
+  function describeTotals(totals) {
+    if (!(totals.seconds > 0)) return "no focus";
+    return totals.sessions + (totals.sessions === 1 ? " session · " : " sessions · ") +
+      formatMinutes(totals.seconds) + " min · " + totals.days +
+      (totals.days === 1 ? " day" : " days");
+  }
+
+  // A trend needs two numbers, so a tag's change is against the eight weeks before
+  // this window. "new" is the honest answer when there is nothing to compare with.
+  function deltaText(now, before) {
+    if (!(before > 0)) return "new";
+    const change = Math.round(((now - before) / before) * 100);
+    if (change === 0) return "no change";
+    return (change > 0 ? "+" : "-") + Math.abs(change) + "%";
+  }
+
+  // The statistics under the grid: eight weekly bars with the average drawn across
+  // them, the averages themselves, and where the time went. They follow the tag
+  // filter, because a filter that changed the grid but not the numbers under it
+  // would be lying about one of the two.
+  function renderStats() {
+    const thisWeek = weekStart(dateKey());
+    const lastEnd = shiftDay(thisWeek, 6);
+    const weeks = [];
+    for (let back = STATS_WEEKS - 1; back >= 0; back -= 1) {
+      const start = shiftDay(thisWeek, -7 * back);
+      weeks.push({ start: start, totals: rangeTotals(start, shiftDay(start, 6)) });
+    }
+    const window = rangeTotals(weeks[0].start, lastEnd);
+    const beforeFrom = shiftDay(weeks[0].start, -7 * STATS_WEEKS);
+    const beforeEnd = shiftDay(weeks[0].start, -1);
+    const before = rangeTotals(beforeFrom, beforeEnd);
+
+    // A window with nothing in it is not a block of zeroes, it is no statistics
+    // yet. The comparison in the tag rows is only worth showing next to them.
+    el.calStats.hidden = !(window.seconds > 0);
+    if (el.calStats.hidden) return;
+
+    const tag = calTag ? tagById(calTag) : null;
+    el.statsWeeksHead.textContent = "Last " + STATS_WEEKS + " weeks" +
+      (tag ? " · " + tag.name : "");
+
+    // Bars are drawn against the best week in the window, so a good week reads as
+    // a tall bar rather than as a full one. Numbers only, but the tooltip is built
+    // as DOM anyway, which is why nothing here needs escaping.
+    const peak = weeks.reduce(function (best, week) {
+      return Math.max(best, week.totals.seconds);
+    }, 0);
+    if (tag) el.statsTracks.style.setProperty("--stats-bar", tag.color);
+    else el.statsTracks.style.removeProperty("--stats-bar");
+
+    el.statsTracks.innerHTML = "";
+    el.statsLabels.innerHTML = "";
+    let previousMonth = "";
+    weeks.forEach(function (week) {
+      const track = document.createElement("div");
+      track.className = "bar-track";
+      track.title = shortDay(week.start) + " - " + shortDay(shiftDay(week.start, 6)) +
+        ": " + describeTotals(week.totals);
+
+      const bar = document.createElement("i");
+      if (week.totals.seconds > 0) {
+        // A week with anything in it is at least visible, or a single session next
+        // to a five-hour week would be a bar of nothing.
+        const share = peak > 0 ? week.totals.seconds / peak : 0;
+        bar.style.height = Math.max(3, Math.round(share * 100)) + "%";
+      } else {
+        bar.className = "empty";
+        bar.style.height = "3px";
+      }
+      track.appendChild(bar);
+      el.statsTracks.appendChild(track);
+
+      const month = week.start.slice(5, 7);
+      const label = document.createElement("span");
+      // The day number alone where the month has not changed, the way a calendar
+      // prints it: "5 Oct", then 12, 19, 26, then "2 Nov", 9, 16, 23.
+      label.textContent = month === previousMonth
+        ? String(Number(week.start.slice(8, 10)))
+        : shortDay(week.start);
+      previousMonth = month;
+      el.statsLabels.appendChild(label);
+    });
+
+    const average = window.seconds / STATS_WEEKS;
+    const line = document.createElement("div");
+    line.className = "stats-avg";
+    line.style.bottom = Math.round(Math.min(1, average / peak) * 100) + "%";
+    const caption = document.createElement("span");
+    caption.textContent = "avg " + formatMinutes(average) + " min";
+    line.appendChild(caption);
+    el.statsTracks.appendChild(line);
+
+    // A picture of numbers needs to be readable as numbers too.
+    el.statsTracks.setAttribute("role", "img");
+    el.statsTracks.setAttribute("aria-label", "Focus minutes by week, oldest first: " +
+      weeks.map(function (week) {
+        return Math.round(week.totals.seconds / 60);
+      }).join(", ") + ".");
+
+    const perDay = Math.round(window.seconds / window.days / 60);
+    const perSession = Math.round(window.seconds / window.sessions / 60);
+    const sentence = [
+      window.days + (window.days === 1 ? " day" : " days") + " focused",
+      perDay + " min a day",
+      perSession + " min a session"
+    ];
+    if (window.best > 0) {
+      sentence.push("best " + formatMinutes(window.best) + " min on " + shortDay(window.bestKey));
+    }
+    el.statsAverages.textContent = sentence.join(" · ");
+
+    const nowTags = tagTotals(weeks[0].start, lastEnd);
+    const beforeTags = tagTotals(beforeFrom, beforeEnd);
+    let rows = settings.tags.map(function (item) {
+      return {
+        id: item.id, name: item.name, color: item.color,
+        seconds: nowTags.byTag[item.id] || 0,
+        before: beforeTags.byTag[item.id] || 0
+      };
+    }).filter(function (row) {
+      return row.seconds > 0 && (!calTag || row.id === calTag);
+    });
+
+    // Time that was never tagged is a real share of the window; leaving it out
+    // would make the others add up to more than they account for.
+    const untagged = window.seconds - nowTags.tagged;
+    if (untagged > 0) {
+      rows.push({
+        id: "", name: "Untagged", color: "",
+        seconds: untagged, before: before.seconds - beforeTags.tagged
+      });
+    }
+    rows.sort(function (a, b) { return b.seconds - a.seconds; });
+
+    el.statsTags.innerHTML = "";
+    rows.forEach(function (row) {
+      const share = Math.round(Math.min(1, row.seconds / window.seconds) * 100);
+
+      const item = document.createElement("div");
+      item.className = "tag-stat";
+      item.style.setProperty("--tag", row.color || "var(--mut)");
+
+      const head = document.createElement("div");
+      head.className = "tag-stat-head";
+      const dot = document.createElement("i");
+      dot.className = "tag-dot";
+      const name = document.createElement("span");
+      name.className = "tag-stat-name";
+      name.textContent = row.name;
+      const value = document.createElement("span");
+      value.className = "tag-stat-value";
+      value.textContent = formatMinutes(row.seconds) + " min · " + share + "% · " +
+        deltaText(row.seconds, row.before);
+      head.appendChild(dot);
+      head.appendChild(name);
+      head.appendChild(value);
+
+      const bar = document.createElement("span");
+      bar.className = "tag-stat-bar";
+      const fill = document.createElement("i");
+      fill.style.width = Math.max(2, share) + "%";
+      bar.appendChild(fill);
+
+      item.appendChild(head);
+      item.appendChild(bar);
+      el.statsTags.appendChild(item);
+    });
+
+    el.statsTagsHead.hidden = !rows.length;
+    el.statsTagsHint.hidden = !rows.length;
+  }
+
   function renderCalendar() {
     const best = bestDaySeconds();
     const tag = calTag ? tagById(calTag) : null;
@@ -3756,6 +4061,8 @@
     const now = new Date();
     el.calNext.disabled =
       (calYear === now.getFullYear() && calMonth === now.getMonth());
+
+    renderStats();
   }
 
   function openCalendar() {
