@@ -1,8 +1,8 @@
 # Monidoro — working notes and handoff
 
 > **Picking this up in a fresh session?** Read this file, then skim
-> `monidoro.html`, then run `git log --oneline`. Then just say
-> *"continue with feature 7"* and you are fully caught up. Nothing is lost.
+> `monidoro.html`, then run `git log --oneline`. Then just say *"continue"* and
+> you are fully caught up. Nothing is lost.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -46,6 +46,12 @@ and pushed.
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
 - Theme: system / light / dark, plus an accent colour picker
+- Background: six built-in backdrops (plain, dunes, aurora, forest, grid,
+  stars) drawn as CSS gradients out of the theme's own colours, so one
+  definition follows light/dark and the accent; plus a photo of the user's own.
+  A picked image is shrunk to fit, kept in this browser only, and sits under a
+  scrim whose strength is adjustable, so the timer stays readable over any
+  picture. Pure CSS and canvas means no files and nothing downloaded
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
@@ -89,9 +95,10 @@ erase anyone's history.
 
 | Key | Shape |
 |---|---|
-| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, ambient, ambientVolume, name, tags, activeTag}` |
+| `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, ambient, ambientVolume, backdrop, backdropDim, name, tags, activeTag}` |
 | `monidoro.completed` | total focus sessions ever, as a string number |
 | `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds, byTag?}}` |
+| `monidoro.photo` | a `data:image/jpeg` URL for the chosen background photo |
 
 `settings.tags` is `[{id, name, color}]` — `id` is a lowercase slug built
 internally and never derived from the name, so renaming a tag cannot orphan the
@@ -99,6 +106,14 @@ history filed under it. `byTag` is `{tagId: {sessions, seconds}}` and is
 **omitted entirely** when empty, so days recorded before tags existed keep the
 shape they already had. There is no migration pass and reading old history never
 rewrites it.
+
+`settings.backdrop` is one of `plain | dunes | aurora | forest | grid | stars |
+photo`, and `backdropDim` is the scrim strength over a photo (0-85). The photo
+itself lives in its own key rather than in `settings`, for two reasons: it is big
+enough to make every backup file unwieldy, and it is tied to the browser it was
+picked in. A backup therefore carries `backdrop: "photo"` but not the image, and
+`sanitizeSettings()` turns that back into `plain` when there is no photo — a
+restored backup shows a preset instead of an empty page.
 
 Four tagging rules worth keeping:
 
@@ -140,9 +155,15 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-Nothing is queued. The two features that were planned here are done and
-described above: keyboard shortcuts with a completion notification (7), and the
-plant with confetti (8).
+Nothing is queued. The three features that were planned here are done and
+described above: keyboard shortcuts with a completion notification (7), the
+plant with confetti (8), and backgrounds (9).
+
+One thing stays unverified: the completion notification on `file://`. The
+browser tool used to test everything else refuses `file://` URLs outright, so
+the only way to check it is by hand — double-click the file and finish a
+session. Every call is guarded (feature detection, permission check, `try`), so
+the worst case is that nothing appears and the alert sound carries the moment.
 
 Ideas raised along the way and deliberately not pursued, so nobody re-opens them
 by accident:
@@ -154,6 +175,10 @@ by accident:
   spent.
 - **A third Swan Lake transfer.** Checked and rejected (see the credits) — no
   modern freely licensed recording of the Scene exists to offer.
+- **Bundled background photographs.** A real picture means another companion
+  file, a licence to pick and a few hundred kilobytes in every copy, where the
+  photo slot already takes any image the user owns and the CSS presets make the
+  app look finished out of the box.
 
 ## Gotchas that cost real time — read before editing
 
@@ -303,7 +328,10 @@ by accident:
     drawer rather than starting. And the key has to be matched as `event.key`,
     not `event.code`: some keyboards, and most automation, send a space bar as
     `key: " "` with an empty `code`, so a `code`-only check is dead exactly where
-    it is being tested.
+    it is being tested. The browser tool's `press` also delivers the key to
+    `<body>` rather than to `document.activeElement`, so "Space on the focused
+    button" has to be tested by dispatching a `KeyboardEvent` on the element —
+    through `press` the shortcut fires and the app looks broken when it is not.
 
 16. **A browser API on `file://` is a bonus, not a promise.** The completion
     notification is guarded on every call (feature detection, permission check,
@@ -326,6 +354,25 @@ by accident:
     `matrix(0,0,0,0,0,0)` and looks dead. Suspend the transitions, or wait, and
     only then believe a measurement.
 
+18. **`hidden` loses to any author rule that sets `display`.** The photo-dimming
+    slider stayed on screen with no photo to dim, because `.field{display:block}`
+    outranks the browser's own `[hidden]{display:none}`. That is why `.drawer`,
+    `.modal`, `.tags`, `.skip` and the rest each carry their own `[hidden]` rule;
+    any new element type with a `display` of its own needs one too. The same
+    family of trap is specificity: `.btn-row button` (0,1,1) beats a bare
+    `.backdrop-tile` (0,1,0), so the tiles — like the accent swatches before
+    them — are styled as `.btn-row …`, otherwise the selected tile paints itself
+    the accent colour and hides the very backdrop it is choosing.
+
+19. **A background photo has to be shrunk before it is stored.** `localStorage`
+    holds roughly 5 MB for the whole origin and base64 adds a third to the bytes,
+    so a phone photo fails on the first save. A picked image is drawn to a canvas
+    at most 1920 px on its long edge and re-encoded as JPEG at 0.82, and anything
+    still over about 1.9 M characters is refused with a message rather than
+    dropped quietly. `store.set()` deliberately swallows a quota error, so the
+    photo write is read back and checked; a setting is not worth that ceremony,
+    but a user's picture is.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -334,6 +381,14 @@ the cycle state machine were walked transition by transition, and the importer
 was attacked with deliberately hostile files. When a result looked wrong, the
 cause was found rather than the test relaxed — that is how the broken ring
 colour and the missing button listeners were both caught.
+
+The photo pipeline is driven the same way, through the real file input: a canvas
+paints an image, `toBlob` makes a `File`, a `DataTransfer` puts it in
+`photoFile.files`, and the input's own `change` event runs the code a real pick
+would. Then the stored data URL is decoded back to check its dimensions, and the
+refusal paths get a text file and a 1920 px field of random noise (which no JPEG
+can squeeze under the cap). Reload, remove and re-import are checked as separate
+steps, because "it worked once" is not what this file is trying to prove.
 
 Keep that bar. It has already paid for itself twice.
 

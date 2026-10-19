@@ -10,6 +10,7 @@
     --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --longbreak:#5b4fa8;
     --warn:#b8860b; --cal-accent:#3f7d4e;
     --plant:#3f7d4e; --plant-dead:#9a8b6a; --bloom:#c76a90;
+    --scrim:244, 241, 234;
     color-scheme:light;
   }
   /* The :not() lets an explicit "light" choice beat a dark OS setting. The
@@ -22,6 +23,7 @@
       --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
       --warn:#e0b04a; --cal-accent:#6dbb7f;
       --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
+      --scrim:20, 19, 16;
       color-scheme:dark;
     }
   }
@@ -31,6 +33,7 @@
     --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
     --warn:#e0b04a; --cal-accent:#6dbb7f;
     --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
+    --scrim:20, 19, 16;
     color-scheme:dark;
   }
   /* Deliberately NO transition on anything whose value comes from a custom
@@ -202,6 +205,10 @@
   }
   .drawer-close{position:absolute; top:12px; right:12px}
   .field{display:block; margin-bottom:18px}
+  /* .field sets display, which outranks the browser's own [hidden] rule, so a
+     hidden field needs the override spelled out - same as the drawer and modal
+     above. */
+  .field[hidden]{display:none}
   .field:last-of-type{margin-bottom:0}
   .field-label{
     display:block; margin-bottom:7px; font-size:.66rem; font-weight:600;
@@ -227,6 +234,73 @@
   .btn-row button.swatch[aria-pressed="true"]{
     background:var(--sw); border-color:var(--ink);
     box-shadow:inset 0 0 0 2px var(--ink);
+  }
+
+  /* Backdrops are built from --bg, --card, --line and low-alpha tints, so one
+     definition follows both themes and the chosen accent. They are pure CSS:
+     nothing is downloaded and file:// needs no extra files. The last choice is
+     the user's own photo, which is a data URL set from JavaScript. */
+  [data-backdrop="dunes"]{
+    --backdrop-image:
+      radial-gradient(120% 95% at 18% -10%, rgba(214,168,110,.32), transparent 62%),
+      radial-gradient(90% 70% at 100% 105%, rgba(122,92,60,.22), transparent 60%),
+      linear-gradient(175deg, var(--card), var(--bg));
+  }
+  [data-backdrop="aurora"]{
+    --backdrop-image:
+      radial-gradient(70% 60% at 14% 4%, rgba(109,187,127,.30), transparent 70%),
+      radial-gradient(65% 55% at 88% 16%, rgba(111,179,217,.26), transparent 70%),
+      radial-gradient(85% 60% at 50% 112%, rgba(169,155,224,.28), transparent 70%);
+  }
+  [data-backdrop="forest"]{
+    --backdrop-image:
+      radial-gradient(110% 80% at 50% 118%, rgba(63,125,78,.40), transparent 68%),
+      radial-gradient(70% 50% at 12% 8%, rgba(63,125,78,.16), transparent 70%);
+  }
+  [data-backdrop="grid"]{
+    --backdrop-image:
+      repeating-linear-gradient(0deg, var(--line) 0 1px, transparent 1px 30px),
+      repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 30px);
+  }
+  [data-backdrop="stars"]{
+    --backdrop-image: radial-gradient(var(--mut) .9px, transparent 1.1px);
+    --backdrop-size: 46px 46px;
+  }
+  body[data-backdrop]{
+    background-size: var(--backdrop-size, cover);
+    background-position: center;
+  }
+  body[data-backdrop]:not([data-backdrop="plain"]):not([data-backdrop="photo"]){
+    background-image: var(--backdrop-image, none);
+  }
+
+  /* The tiles in Customize show the backdrop they choose, from the same
+     --backdrop-image definition, so a preset cannot drift from its preview. */
+  /* One row of seven equal tiles rather than a wrapping flex row: wrapped
+     rows would stretch to fill and make the tiles different sizes. */
+  #backdropRow{
+    display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:6px;
+  }
+  /* `.btn-row` is needed to outrank the row's own button rules, exactly like
+     the accent swatches above: otherwise the selected tile would paint itself
+     the accent colour and hide the backdrop it is choosing. */
+  .btn-row .backdrop-tile{
+    min-width:0; padding:3px; font-size:.58rem;
+    color:var(--mut); background:transparent; border:0;
+  }
+  .btn-row .backdrop-tile[aria-pressed="true"]{
+    color:var(--ink); background:transparent; border-color:transparent;
+  }
+  .backdrop-tile .tile-preview{
+    display:flex; align-items:center; justify-content:center;
+    height:30px; margin-bottom:3px; border-radius:7px;
+    border:1px solid var(--line); background-color:var(--bg);
+    background-image:var(--backdrop-image, none);
+    background-size:var(--backdrop-size, cover); background-position:center;
+    color:var(--mut); font-size:.85rem;
+  }
+  .backdrop-tile[aria-pressed="true"] .tile-preview{
+    outline:2px solid var(--accent); outline-offset:1px;
   }
   .hint{margin:9px 0 0; font-size:.7rem; color:var(--mut)}
   .hint[data-state="ok"]{color:var(--accent)}
@@ -446,6 +520,34 @@
       </div>
 
       <div class="field">
+        <span class="field-label">Background</span>
+        <div class="btn-row" id="backdropRow" role="group" aria-label="Background">
+          <button type="button" class="backdrop-tile" data-backdrop="plain"><span class="tile-preview"></span>Plain</button>
+          <button type="button" class="backdrop-tile" data-backdrop="dunes"><span class="tile-preview"></span>Dunes</button>
+          <button type="button" class="backdrop-tile" data-backdrop="aurora"><span class="tile-preview"></span>Aurora</button>
+          <button type="button" class="backdrop-tile" data-backdrop="forest"><span class="tile-preview"></span>Forest</button>
+          <button type="button" class="backdrop-tile" data-backdrop="grid"><span class="tile-preview"></span>Grid</button>
+          <button type="button" class="backdrop-tile" data-backdrop="stars"><span class="tile-preview"></span>Stars</button>
+          <button type="button" class="backdrop-tile" data-backdrop="photo" id="photoTile"><span class="tile-preview" id="photoPreview">+</span>Photo</button>
+        </div>
+        <div class="btn-row" id="photoRow">
+          <button type="button" id="photoBtn">Choose image</button>
+          <button type="button" id="photoClear" hidden>Remove image</button>
+        </div>
+        <label class="field" id="photoDimField" hidden style="margin-top:12px">
+          <span class="field-label">Photo dimming</span>
+          <input type="range" id="photoDim" min="0" max="85" step="5"
+                 aria-label="Photo dimming">
+        </label>
+        <input type="file" id="photoFile" accept="image/*" hidden>
+        <p class="hint" id="photoHint">
+          A photo is shrunk to fit, kept in this browser only and never uploaded.
+          It is not part of an export, so a backup restored elsewhere starts back
+          on a preset.
+        </p>
+      </div>
+
+      <div class="field">
         <span class="field-label">Alert sound</span>
         <div class="btn-row" id="soundRow">
           <button type="button" data-sound="classic">Classic</button>
@@ -495,9 +597,13 @@
         <span class="field-label">Keyboard</span>
         <p class="hint">
           Space starts and pauses, R puts the session back to the beginning.
-          Both are left alone while you are typing in a field, and Space still
-          presses whichever button has focus. A notification appears when a
-          session ends if the browser allows it - the sound is there either way.
+          Both step aside while you are typing in a field, and while a button
+          has focus (Start and Reset excepted), so Tab then Space still presses
+          the button you tabbed to.
+        </p>
+        <p class="hint">
+          A notification appears when a session ends if the browser allows it.
+          The sound is there either way.
         </p>
       </div>
 
@@ -578,6 +684,19 @@
   // where their files are named further down.
   const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan", "swanArchive"];
 
+  // Backdrops are either a built-in CSS gradient - no file, so they work from
+  // file:// and cost nothing - or a photo of the user's own, which is shrunk
+  // and kept as a data URL in its own key. "photo" is the choice that shows it.
+  const BACKDROP_KEYS = [
+    "plain", "dunes", "aurora", "forest", "grid", "stars", "photo"
+  ];
+  const STORE_PHOTO = "monidoro.photo";
+  // localStorage holds roughly 5 MB for the whole origin and a data URL is a
+  // third larger than the bytes it encodes, so a phone photo is resized before
+  // it is stored and refused if even that will not fit.
+  const PHOTO_MAX_SIDE = 1920;
+  const PHOTO_MAX_CHARS = 1900000;
+
   // Accents are restricted to a plain six-digit hex colour, so a hand-edited
   // or imported value can never smuggle anything else into the stylesheet.
   const ACCENT_PATTERN = /^#[0-9a-f]{6}$/i;
@@ -630,6 +749,8 @@
     // Off by default: nothing should start making noise unasked.
     ambient: "off",
     ambientVolume: 40,
+    backdrop: "plain",
+    backdropDim: 55,
     name: "",
     tags: DEFAULT_TAGS,
     activeTag: ""
@@ -766,6 +887,15 @@
         } catch (err) {
           // Quota exceeded or storage blocked mid-session - keep going.
         }
+      },
+      remove: function (key) {
+        delete memory[key];
+        if (!backing) return;
+        try {
+          backing.removeItem(key);
+        } catch (err) {
+          // Same as above: the in-memory copy has already forgotten it.
+        }
       }
     };
   })();
@@ -874,6 +1004,14 @@
     // selecting it, or the rename would quietly drop the choice back to "off".
     const ambient = source.ambient === "swanLong" ? "swanArchive" : source.ambient;
 
+    // "photo" only means something while there is a photo: an export cannot
+    // carry the image, so a settings file restored in a new browser has to fall
+    // back to a preset rather than paint nothing at all.
+    let backdrop = BACKDROP_KEYS.indexOf(source.backdrop) >= 0
+      ? source.backdrop
+      : DEFAULTS.backdrop;
+    if (backdrop === "photo" && !readStored(STORE_PHOTO)) backdrop = "plain";
+
     return {
       focusSec: clampInt(
         source.focusSec, LIMITS.focus.min, LIMITS.focus.max, DEFAULTS.focusSec
@@ -906,6 +1044,8 @@
         ? ambient
         : DEFAULTS.ambient,
       ambientVolume: clampInt(source.ambientVolume, 0, 100, DEFAULTS.ambientVolume),
+      backdrop: backdrop,
+      backdropDim: clampInt(source.backdropDim, 0, 85, DEFAULTS.backdropDim),
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name,
       tags: tags,
       activeTag: activeTag
@@ -1059,6 +1199,13 @@
     dataStatus: document.getElementById("dataStatus"),
     nameInput: document.getElementById("nameInput"),
     ambientVolume: document.getElementById("ambientVolume"),
+    photoPreview: document.getElementById("photoPreview"),
+    photoBtn: document.getElementById("photoBtn"),
+    photoClear: document.getElementById("photoClear"),
+    photoDim: document.getElementById("photoDim"),
+    photoDimField: document.getElementById("photoDimField"),
+    photoFile: document.getElementById("photoFile"),
+    photoHint: document.getElementById("photoHint"),
     tagRow: document.getElementById("tagRow"),
     tagList: document.getElementById("tagList"),
     addTagBtn: document.getElementById("addTagBtn"),
@@ -2424,6 +2571,163 @@
     });
   });
 
+  /* ---------- background ---------- */
+
+  const backdropButtons = Array.prototype.slice.call(
+    document.querySelectorAll("#backdropRow [data-backdrop]")
+  );
+
+  const PHOTO_HINT =
+    "A photo is shrunk to fit, kept in this browser only and never uploaded. " +
+    "It is not part of an export, so a backup restored elsewhere starts back " +
+    "on a preset.";
+
+  // What is actually on screen: "photo" only counts while there is one, and
+  // every other name is a preset the stylesheet knows.
+  function effectiveBackdrop() {
+    if (settings.backdrop !== "photo") return settings.backdrop;
+    return readStored(STORE_PHOTO) ? "photo" : "plain";
+  }
+
+  function photoStatus(message, state) {
+    el.photoHint.textContent = message || PHOTO_HINT;
+    if (state) el.photoHint.setAttribute("data-state", state);
+    else el.photoHint.removeAttribute("data-state");
+  }
+
+  function applyBackdrop() {
+    const key = effectiveBackdrop();
+    document.body.setAttribute("data-backdrop", key);
+
+    if (key !== "photo") {
+      document.body.style.removeProperty("background-image");
+      return;
+    }
+
+    // The scrim is the theme's own background colour at the chosen strength, so
+    // the timer stays readable over any photo in either theme. --scrim is a
+    // plain "r, g, b" triple, which is why the alpha can simply be added here.
+    const alpha = clampInt(settings.backdropDim, 0, 85, DEFAULTS.backdropDim) / 100;
+    document.body.style.backgroundImage =
+      "linear-gradient(rgba(var(--scrim), " + alpha + "), rgba(var(--scrim), " + alpha + ")), " +
+      'url("' + readStored(STORE_PHOTO) + '")';
+  }
+
+  function renderBackdropChoice() {
+    const key = effectiveBackdrop();
+    const photo = readStored(STORE_PHOTO);
+    backdropButtons.forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.dataset.backdrop === key));
+    });
+    // The "Photo" tile previews the image it would show, and the two buttons
+    // beneath only mean anything in relation to one. A bare tile with a plus
+    // reads as an invitation to add one.
+    el.photoPreview.style.backgroundImage = photo ? 'url("' + photo + '")' : "";
+    el.photoPreview.textContent = photo ? "" : "+";
+    el.photoClear.hidden = !photo;
+    el.photoDimField.hidden = !(photo && settings.backdrop === "photo");
+    el.photoDim.value = settings.backdropDim;
+  }
+
+  // Shrink before storing: a phone photo is many times the size of the whole
+  // storage quota, and a data URL is another third on top of the bytes.
+  function storePhoto(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type || "")) {
+      photoStatus("That file is not an image.", "err");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = function () {
+      photoStatus("That file could not be read.", "err");
+    };
+    reader.onload = function () {
+      const img = new Image();
+      img.onerror = function () {
+        photoStatus("That image could not be decoded.", "err");
+      };
+      img.onload = function () {
+        const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        let data = "";
+        try {
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          data = canvas.toDataURL("image/jpeg", 0.82);
+        } catch (err) {
+          data = "";
+        }
+        if (!data || data.indexOf("data:image/") !== 0) {
+          photoStatus("That image could not be prepared.", "err");
+          return;
+        }
+        if (data.length > PHOTO_MAX_CHARS) {
+          photoStatus("That image is still too large to keep in this browser.", "err");
+          return;
+        }
+        store.set(STORE_PHOTO, data);
+        // store.set() swallows a quota error, so check rather than assume.
+        if (readStored(STORE_PHOTO) !== data) {
+          photoStatus("This browser is out of room for an image.", "err");
+          return;
+        }
+        settings.backdrop = "photo";
+        saveSettings();
+        applyBackdrop();
+        renderBackdropChoice();
+        photoStatus(
+          "Saved. It is in this browser only, never uploaded, and not part of an export.",
+          "ok"
+        );
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  backdropButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const key = btn.dataset.backdrop;
+      // Picking "Photo" with no photo is only sensible as an invitation to
+      // choose one, so it opens the file dialog rather than doing nothing.
+      if (key === "photo" && !readStored(STORE_PHOTO)) {
+        el.photoFile.click();
+        return;
+      }
+      settings.backdrop = key;
+      saveSettings();
+      applyBackdrop();
+      renderBackdropChoice();
+    });
+  });
+
+  el.photoBtn.addEventListener("click", function () {
+    el.photoFile.click();
+  });
+
+  el.photoFile.addEventListener("change", function () {
+    storePhoto(el.photoFile.files && el.photoFile.files[0]);
+    // Resetting the input means choosing the same file twice still fires change.
+    el.photoFile.value = "";
+  });
+
+  el.photoClear.addEventListener("click", function () {
+    store.remove(STORE_PHOTO);
+    if (settings.backdrop === "photo") settings.backdrop = "plain";
+    saveSettings();
+    applyBackdrop();
+    renderBackdropChoice();
+    photoStatus();
+  });
+
+  el.photoDim.addEventListener("input", function () {
+    settings.backdropDim = clampInt(Number(el.photoDim.value), 0, 85, DEFAULTS.backdropDim);
+    saveSettings();
+    applyBackdrop();
+  });
+
   /* ---------- presets ---------- */
 
   const presetButtons = Array.prototype.slice.call(
@@ -2837,6 +3141,8 @@
     // here - otherwise an import silently keeps the old appearance.
     applyTheme();
     renderThemeChoice();
+    applyBackdrop();
+    renderBackdropChoice();
     renderGreeting();
     renderStats();
 
@@ -2930,6 +3236,8 @@
   renderPresets();
   applyTheme();
   renderThemeChoice();
+  applyBackdrop();
+  renderBackdropChoice();
   renderGreeting();
   renderStats();
   render();
