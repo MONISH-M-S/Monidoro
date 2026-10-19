@@ -62,6 +62,14 @@ and pushed.
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
   the settings are taller than a short screen
+- Keyboard: Space starts and pauses, R puts the session back to the beginning.
+  Both are left alone while a text field has focus, and while a button has focus
+  Space is left to that button — except Start and Reset, which mean the same
+  thing — so Tab to a noise chip and Space still presses the chip
+- A desktop notification when a session ends ("Focus session complete" / "Break
+  over"), asked for on the first start rather than at load. It is a bonus and
+  never a promise: on `file://` the origin is opaque and the prompt may never
+  appear, so every call is guarded and the alert sound is the real signal
 
 ## Storage keys (localStorage)
 
@@ -276,6 +284,26 @@ focusing and dies if you bail early.
     double-counts the level by 3 dB. There is no shortcut around measuring the
     finished file: loudness in LUFS, peak, and inter-sample peak, before and
     after.
+
+15. **Do not steal a key that already has an owner, and match the event you are
+    actually given.** Space already means "press the focused button", so the
+    shortcut defers to any focused button and lets the browser press it —
+    otherwise Tab, Space on a noise chip would start a session instead of
+    previewing rain. That has a visible corollary: Escape closes a drawer and
+    puts focus back on the button that opened it, so the next Space reopens the
+    drawer rather than starting. And the key has to be matched as `event.key`,
+    not `event.code`: some keyboards, and most automation, send a space bar as
+    `key: " "` with an empty `code`, so a `code`-only check is dead exactly where
+    it is being tested.
+
+16. **A browser API on `file://` is a bonus, not a promise.** The completion
+    notification is guarded on every call (feature detection, permission check,
+    `try`) because from an opaque origin like `file://` the API may be missing
+    or the prompt may never appear. Permission can also only be asked for from a
+    gesture, so it is requested when a session starts — and only once per visit,
+    because a browser that stays at "default" was dismissed, and asking every
+    session is nagging. The alert sound is the real signal; the notification is
+    on top of it.
 
 ## How features were verified
 

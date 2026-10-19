@@ -288,8 +288,8 @@
   </div>
 
   <div class="controls">
-    <button id="go">Start</button>
-    <button id="reset">Reset</button>
+    <button id="go" title="Start or pause (Space)">Start</button>
+    <button id="reset" title="Back to the start of the session (R)">Reset</button>
   </div>
   <div class="tags" id="tagRow" role="group" aria-label="Tag for the next session" hidden></div>
   <button type="button" class="skip" id="skip" hidden>Skip break</button>
@@ -406,6 +406,16 @@
         <p class="hint">
           Tagging is optional. Click a colour to change it. Removing a tag keeps
           all of your time; it only loses the breakdown by that tag.
+        </p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Keyboard</span>
+        <p class="hint">
+          Space starts and pauses, R puts the session back to the beginning.
+          Both are left alone while you are typing in a field, and Space still
+          presses whichever button has focus. A notification appears when a
+          session ends if the browser allows it - the sound is there either way.
         </p>
       </div>
 
@@ -1743,7 +1753,47 @@
     if (left === 0) finish();
   }
 
+  /* ---------- desktop notification ---------- */
+
+  // The notification is a bonus and never a promise: this page is often opened
+  // from file://, where the origin is opaque and the permission prompt may not
+  // even appear. So every use is guarded and the app carries on silently
+  // without it - the alert sound is the real signal, and it always fires.
+  function notify(title, body) {
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission !== "granted") return;
+      new Notification(title, { body: body, tag: "monidoro", silent: true });
+    } catch (err) {
+      // Nothing to do: a browser that refuses is one without notifications.
+    }
+  }
+
+  // Permission can only be asked for in answer to a gesture, so this is called
+  // when a session is started rather than at load. Asking once per visit is
+  // enough: "default" after that means the prompt was dismissed, and a question
+  // every session would be nagging.
+  let notifyAsked = false;
+
+  function askToNotify() {
+    if (notifyAsked) return;
+    notifyAsked = true;
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission !== "default") return;
+      const answer = Notification.requestPermission();
+      if (answer && typeof answer.catch === "function") {
+        answer.catch(function () {});
+      }
+    } catch (err) {
+      // Old callback-style implementations and file:// land here.
+    }
+  }
+
   function finish() {
+    // Read before the branches flip it: the notification describes the session
+    // that just ended, not the one about to start.
+    const done = mode;
     stop();
     playSound(selectedSound);
 
@@ -1767,6 +1817,16 @@
     total = durationFor(mode);
     left = total;
     render();
+
+    if (done === "focus") {
+      notify(
+        "Focus session complete",
+        mode === "longbreak" ? "Set complete - take a long break." : "Time for a break."
+      );
+    } else {
+      notify("Break over", "Back to focus.");
+    }
+
     autoId = setTimeout(function () {
       autoId = null;
       start();
@@ -1777,6 +1837,7 @@
     cancelAuto();
     if (running) return;
     ensureAudio();
+    askToNotify();
 
     // "left === total" means this is a session starting from the top rather
     // than a resume after a pause, so it is the moment to fix which tag the
@@ -2476,6 +2537,39 @@
     // Whichever overlay is open, Escape closes it.
     if (!el.settingsPanel.hidden) closeSettings();
     else if (!el.calendarModal.hidden) closeCalendar();
+  });
+
+  // Space starts and pauses, R resets - the two things a session needs while
+  // the pointer is somewhere else. Both are skipped while a text field has
+  // focus, or typing a name would start and stop the timer instead.
+  const TYPING_TAGS = /^(INPUT|TEXTAREA|SELECT)$/;
+
+  document.addEventListener("keydown", function (event) {
+    if (event.defaultPrevented) return;
+    // Ctrl+R still reloads, Ctrl+S still saves, and so on.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const target = event.target;
+    const tag = target && target.tagName ? target.tagName : "";
+    if (TYPING_TAGS.test(tag) || (target && target.isContentEditable)) return;
+
+    // Space already means "press the button that has focus", and that is the
+    // right answer for every button except the timer's own two - stealing it
+    // there would turn "Tab to Rain, press Space" into a started session. Note
+    // the corollary: after Escape closes the drawer, focus is back on the
+    // Customize button, so Space reopens the drawer rather than starting.
+    if (tag === "BUTTON" && target !== el.go && target !== el.reset) return;
+
+    // Space is a space bar here whatever the keyboard calls it: `key` is " "
+    // even when `code` is missing, which it is for some virtual keyboards and
+    // for tools that drive the page.
+    if (event.key === " " || event.code === "Space") {
+      event.preventDefault();
+      toggle();
+    } else if (event.key === "r" || event.key === "R") {
+      event.preventDefault();
+      reset();
+    }
   });
 
   /* ---------- backup and restore ---------- */
