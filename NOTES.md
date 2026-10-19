@@ -17,11 +17,12 @@ no dependencies, no network. Designed to be opened by double-click from
 Testing with the local server is easier to automate, but `file://` is the real
 target and must keep working.
 
-One file is no longer quite enough: **`swan-lake.ogg`** and
-**`swan-lake-archive.ogg`** must sit next to `monidoro.html` for the two Swan
-Lake focus noises to play the real recordings. Both are strictly optional — with
-either file missing, that choice falls back to the app's own synthesised melody,
-so a copy of the HTML on its own still makes every sound it ever did.
+One file is no longer quite enough: **`swan-lake.ogg`**,
+**`swan-lake-archive.ogg`** and **`lofi.ogg`** must sit next to `monidoro.html`
+for the two Swan Lake focus noises and the lofi track to play the real
+recordings. All three are strictly optional — with a file missing, that choice
+falls back to the app's own synthesised melody, so a copy of the HTML on its own
+still makes every sound it ever did.
 
 Music of your own is read from beside the page rather than uploaded:
 `focus-music-1.ogg`, then `focus-music-2.ogg` and on for a playlist (`.mp3`,
@@ -61,15 +62,15 @@ and pushed.
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, plus two real Swan Lake recordings, both looped: `swan-lake.ogg`
-  ("Swan Lake Vintage" — Barbirolli, 1933, the Scene alone, 2:30) and
-  `swan-lake-archive.ogg` ("Swan Lake European" — European Archive, the Scene
-  and on into the rest of Act II, 4:10). Both files were levelled to the same
-  loudness on disk, so switching between them does not call for a different
-  slider position. With a file missing, that choice plays the app's own
-  transcription of the Scene, taken from the engraving's MusicXML (215 notes,
-  182 s, looped), so the choice is never silent. One volume slider drives all of
-  them. Plays only while a focus session runs
+  filtered, plus three real recordings, all looped and all through one volume
+  slider: `swan-lake.ogg` ("Swan Lake Vintage" — Barbirolli, 1933, the Scene
+  alone, 2:30), `swan-lake-archive.ogg` ("Swan Lake European" — European Archive,
+  the Scene and on into the rest of Act II, 4:10) and `lofi.ogg` ("Lofi" — a CC0
+  instrumental, 3:35). All three files were levelled to the same loudness on
+  disk, so switching between them does not call for a different slider position.
+  With a file missing, that choice plays the app's own transcription of the
+  Scene, taken from the engraving's MusicXML (215 notes, 182 s, looped), so the
+  choice is never silent. Plays only while a focus session runs
 - Music of your own as a focus sound: files kept beside the page are shuffled
   when the session starts and played one after another, and a single file picked
   by hand plays for that visit. Nothing is uploaded and nothing is stored: a
@@ -192,6 +193,15 @@ by accident:
 - **A record of dead plants.** Wilting leaves no trace anywhere: it is feedback
   for the moment, not a history of failure, and the day records stay about time
   spent.
+- **Shipping the famous game lofi albums.** Asked for by name and checked, so
+  nobody spends a happy hour on it again: the Pokémon lofi releases (Mikel's
+  *Poké & Chill*, the *Poké Tape* series) are GameChops' and their own pages say
+  `all rights reserved`, with the compositions licensed cover versions of
+  Nintendo's music on top — nothing there can be redistributed from a public
+  repository. The "your own music" slot is the answer instead: buy the album
+  (much of it is name-your-price on Bandcamp, so the arranger gets paid), keep
+  the files beside the page as `focus-music-1.ogg` and on, and the timer plays
+  them without the app shipping anything.
 - **A third Swan Lake transfer.** Checked and rejected (see the credits) — no
   modern freely licensed recording of the Scene exists to offer.
 - **Bundled background photographs.** A real picture means another companion
@@ -336,7 +346,10 @@ by accident:
     +3 dB, so measuring a stereo file's loudness and then downmixing it
     double-counts the level by 3 dB. There is no shortcut around measuring the
     finished file: loudness in LUFS, peak, and inter-sample peak, before and
-    after.
+    after. (d) A modern master can arrive *already clipping* — the lofi track
+    measured a true peak of +0.1 dBTP — and then the whole job is to turn it
+    down until it matches the loudness of what it will sit beside, which
+    unclipped it for free. Matching loudness is the goal; matching peaks is not.
 
 15. **Do not steal a key that already has an owner, and match the event you are
     actually given.** Space already means "press the focused button", so the
@@ -445,7 +458,10 @@ shuffle was run more than once to see a different track open the session, the
 picked file went in through the real input, a text file was refused, and the
 folder with only the HTML in it was run to prove the empty case: every missing
 recording fell back to the synthesised melody and the empty chip opened its
-picker.
+picker. The bundled lofi track was measured rather than trusted, before and
+after its conversion: -9.8 LUFS and +0.1 dBTP going in, -18 LUFS coming out, and
+the decoded file read back for duration, RMS and peak instead of believing the
+encoder.
 
 Keep that bar. It has already paid for itself twice.
 
@@ -473,6 +489,24 @@ Keep that bar. It has already paid for itself twice.
   recording is out of copyright in the EU after 50 years), but pre-1972 US sound
   recordings are protected for 100 years from publication, i.e. into the 2030s.
   Fine for a private timer; not a clean US redistribution.
+- **`lofi.ogg`** — "When Time Called Me Darling ( Lofi, Relaxing, Chill)" by
+  [HoliznaCC0](https://freemusicarchive.org/music/holiznacc0/), from the album
+  *Public Domain Lofi*, dedicated to the public domain under
+  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The dedication
+  requires no attribution and allows redistribution, which is why this is the one
+  piece of the app that could be shipped inside a public repository without
+  argument; it is credited here anyway because that is the right thing to do.
+  Taken from the
+  [Free Music Archive](https://freemusicarchive.org/music/holiznacc0/public-domain-lofi/when-time-called-me-darling-lofi-relaxing-chill),
+  encoded to Vorbis at quality 4 (113 kbps, 215.3 s, 3.0 MB). The master measured
+  **-9.8 LUFS with a true peak of +0.1 dBTP** — a hot modern master, already
+  clipping — so it took about -8.2 dB to reach the transfers' own -18 LUFS. That
+  is the whole job: it arrives loud and gets turned *down*, where the European
+  Archive transfer arrived quiet and had to be raised with limiting. After
+  decoding it measures an RMS of 0.100 and a peak of 0.41, so no limiting was
+  needed at all. Its spectrum is the reason it sounds like lofi rather than like
+  a mistake: 27% of its energy sits below 150 Hz and 1.2% above 8 kHz, against
+  the 1933 transfer's dead stop at 6 kHz.
 - Considered and **not** used, for whoever looks next: a 1959 Valiant LP
   transfer of Act II (CC0, released by Gerard Arthus, and easily the brightest of
   the lot — energy to 16 kHz where the HMV one stops dead at 6 kHz — but a
