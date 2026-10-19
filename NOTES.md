@@ -3,6 +3,12 @@
 > **Picking this up in a fresh session?** Read this file, then skim
 > `monidoro.html`, then run `git log --oneline`. Then just say *"continue"* and
 > you are fully caught up. Nothing is lost.
+>
+> **The order for new work is the list under "Remaining work"**, and it is kept
+> in the order it was agreed: a contrast pass over the backdrops, then more focus
+> noises, then deeper history statistics, then the next slice of the task list.
+> Nothing there is started — the tree is clean, and every feature described below
+> was committed and pushed as it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -165,7 +171,8 @@ restored backup shows a preset instead of an empty page.
 
 `monidoro.tasks` keeps the list **and** the pointer to the task being worked on
 in one record, so a pointer can never arrive without the list it points into.
-`text` is capped at 200 characters and `est`/`used` at 99 and 9999, an id is a
+`text` is capped at 200 characters, `est` and `used` at 99 and 9999, and the list
+itself at 200 tasks; an id is a
 lowercase slug built internally like a tag's, and `sanitizeTasks()` drops an
 entry that cannot be read rather than guessing — including a duplicate id, since
 every lookup is by id and a duplicate would leave one row unreachable and
