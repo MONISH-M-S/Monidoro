@@ -17,6 +17,12 @@ no dependencies, no network. Designed to be opened by double-click from
 Testing with the local server is easier to automate, but `file://` is the real
 target and must keep working.
 
+One file is no longer quite enough: **`swan-lake.ogg`** must sit next to
+`monidoro.html` for the Swan Lake focus noise to play the real recording. It is
+strictly optional — with the file missing the app falls back to its own
+synthesised melody, so a copy of the HTML on its own still makes every sound it
+ever did.
+
 The file was called `monodoro.html` until the app was renamed. If a browser
 stored its data against the old *file path* rather than against `file://` as a
 whole, opening the renamed file starts with an empty history — recover with the
@@ -35,7 +41,7 @@ and pushed.
 - Presets: Classic 25/5, Deep 50/10, Ultradian 90/20
 - Custom focus / break / long-break lengths, sessions per set, daily goal
 - Daily goal progress bar (minutes) and current / best streaks
-- Four synthesised alert sounds via Web Audio — no audio files
+- Four synthesised alert sounds via Web Audio, with no files of their own
 - Optional profile name, shown as a greeting
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
@@ -43,9 +49,11 @@ and pushed.
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, plus the whole Swan Lake Scene (Tchaikovsky, public domain, Op. 20 Act
-  II No. 10) as a looping three-minute melody, with a volume slider. Plays only
-  while a focus session runs
+  filtered, plus Swan Lake — the whole Scene (Tchaikovsky, Op. 20 Act II No. 10)
+  as `swan-lake.ogg`, a real 1933 orchestral recording, looped. With that file
+  missing it plays the app's own transcription of the same Scene, taken from the
+  engraving's MusicXML (215 notes, 182 s, looped), so the choice is never silent.
+  One volume slider drives both. Plays only while a focus session runs
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -184,7 +192,10 @@ focusing and dies if you bail early.
    threshold was squashing the *whole* signal to about 40% of its intended level
    rather than catching peaks, because noise is dense enough to keep a
    compressor engaged continuously. It now sits at -1 dB and reports 0.00 dB of
-   reduction, which is what a safety net should look like.
+   reduction, which is what a safety net should look like. The bundled recording
+   is measured the same way — `decodeAudioData()` in the page gives its duration,
+   RMS and a per-second envelope, which is how its level was checked and how the
+   two-second harp intro (and so the preview length) was found.
 
 10. **A melody is not a row of chimes.** The alert sounds decay across the whole
     note - a pluck. Right for a "ding", wrong for a tune: the Swan Lake theme
@@ -226,6 +237,19 @@ focusing and dies if you bail early.
     it - the quietest 20 ms at the seam went from 0.0000 to 0.0137 against a body
     level of 0.0944, i.e. the statements now overlap instead of gapping.
 
+13. **A media element is not on the graph's volume curve.** The recording plays
+    through a plain `<audio>` element rather than through the noise graph, because
+    routing a media element into a graph taints it when the page is opened from
+    `file://` — and a tainted source is *silence*, a failure that looks exactly
+    like a broken file. That puts it on a different scale: the noises' curve tops
+    out at 0.28 (a stack of noise layers adds up) while an element tops out at
+    1.00. Matching the transfer's RMS to the noises left the default 40% at 0.19
+    volume, about 14 dB below a normal track, and a band-limited 1933 mono
+    transfer sounds fainter still at the same RMS — it was reported straight away
+    as "the volume was low". The recording therefore gets
+    `swanRecordingVolume()`, where the slider *is* the element volume. Loudness is
+    a judgement, so check it by ear and not only by RMS.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -236,3 +260,19 @@ cause was found rather than the test relaxed — that is how the broken ring
 colour and the missing button listeners were both caught.
 
 Keep that bar. It has already paid for itself twice.
+
+## Credits and licensing
+
+- **`swan-lake.ogg`** — *Swan Lake*, Op. 20, Act II No. 10, "Scène": the London
+  Philharmonic Orchestra under John Barbirolli, HMV, 22 July 1933. Transferred by
+  [CHARM](https://www.charm.rhul.ac.uk/) and hosted on
+  [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tchaikovsky_Swan_Lake_Op.20_No.10._Sc%C3%A8ne.ogg)
+  as public domain. Tchaikovsky died in 1893, so the composition itself is long
+  out of copyright everywhere.
+- The recording's own status is the murky part, and worth knowing before this is
+  ever republished: Commons files it under a PD-EU rationale (a pre-1957 sound
+  recording is out of copyright in the EU after 50 years), but pre-1972 US sound
+  recordings are protected for 100 years from publication, i.e. into the 2030s.
+  Fine for a private timer; not a clean US redistribution.
+- Everything else in the app is written from scratch, and the synthesised melody
+  is transcribed from a public-domain engraving's MusicXML rather than by ear.

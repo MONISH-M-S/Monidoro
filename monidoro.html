@@ -1396,6 +1396,12 @@
     if (!ambientNodes) return;
     const playing = ambientNodes;
     ambientNodes = null;
+    // The recording is a media element rather than a set of scheduled nodes, so
+    // pausing it is the whole job.
+    if (playing.el) {
+      playing.el.pause();
+      return;
+    }
     // The melody re-arms itself with a timer, so it has to be cancelled here or
     // a stopped sound would schedule the next statement back into life.
     if (playing.melodyId !== undefined && playing.melodyId !== null) {
@@ -1441,12 +1447,84 @@
     return { master: master, limiter: limiter };
   }
 
+  // The real thing: the Scene played by an orchestra, bundled as swan-lake.ogg
+  // beside this file. It plays through a plain media element rather than the Web
+  // Audio graph above, because routing a media element through a graph taints it
+  // when the page is opened from file:// - and a tainted source is silence.
+  //
+  // Tchaikovsky's music is public domain, and so is this particular transfer (see
+  // NOTES.md for the credit). If the file is missing or will not decode, the
+  // synthesised melody below takes over, so the choice is never simply silent.
+  const SWAN_RECORDING = "swan-lake.ogg";
+
+  // The recording deliberately does not share the noises' gain curve. That curve
+  // tops out at 0.28 because a stack of noise layers adds up, and matching the
+  // transfer's RMS to it left the default 40% at 0.19 volume - measured, about
+  // 14 dB below a normal track, with a band-limited 1933 mono transfer sounding
+  // fainter still at the same RMS. So the slider is the element's own volume
+  // instead: quiet at the bottom, a normal listening level at the top, and no
+  // dead travel at the end of the slider.
+  function swanRecordingVolume() {
+    return Math.min(1, settings.ambientVolume / 100);
+  }
+
+  let swanRecording = null;
+  let swanRecordingFailed = false;
+
+  function swanRecordingElement() {
+    if (swanRecording) return swanRecording;
+
+    swanRecording = new Audio();
+    swanRecording.loop = true;
+    swanRecording.preload = "auto";
+    // A missing or undecodable file must not leave a session silent, so the
+    // melody takes over - but only when the recording is the thing that failed
+    // while playing.
+    swanRecording.addEventListener("error", function () {
+      swanRecordingFailed = true;
+      if (ambientNodes && ambientNodes.el === swanRecording) {
+        ambientNodes = null;
+        swanRecording.pause();
+        if (audioCtx) startSwanPlayer();
+      }
+    });
+    swanRecording.src = SWAN_RECORDING;
+    return swanRecording;
+  }
+
+  function startSwanRecording() {
+    const el = swanRecordingElement();
+    el.volume = swanRecordingVolume();
+    // Rewind, so every focus session opens on the same bars instead of picking up
+    // wherever the last one happened to stop.
+    try { el.currentTime = 0; } catch (err) { /* not seekable yet */ }
+    ambientNodes = { el: el };
+
+    const playing = el.play();
+    if (playing && playing.catch) {
+      // A browser may still refuse to start audio. Dropping the node means the
+      // next deliberate press tries again instead of playing into nothing.
+      playing.catch(function () {
+        if (ambientNodes && ambientNodes.el === el) ambientNodes = null;
+      });
+    }
+  }
+
   function startAmbientNodes() {
-    if (ambientNodes || !audioCtx) return;
+    if (ambientNodes) return;
     if (settings.ambient === "swan") {
+      // The recording is tried first because it needs no audio graph at all, so
+      // it plays even where Web Audio is unavailable; the melody is the fallback,
+      // not the other way round.
+      if (!swanRecordingFailed) {
+        startSwanRecording();
+        return;
+      }
+      if (!audioCtx) return;
       startSwanPlayer();
       return;
     }
+    if (!audioCtx) return;
     const spec = AMBIENT[settings.ambient];
     if (!spec) return;
 
@@ -1580,6 +1658,10 @@
 
   function applyAmbientVolume() {
     if (!ambientNodes) return;
+    if (ambientNodes.el) {
+      ambientNodes.el.volume = swanRecordingVolume();
+      return;
+    }
     ambientNodes.master.gain.value = ambientGain() * ambientNodes.trim;
   }
 
@@ -1606,10 +1688,14 @@
     ensureAudio();
     startAmbientNodes();
     cancelAmbientStop();
+    // A noise makes its character known in a moment; the Scene opens with a harp
+    // arpeggio and only reaches the tune a few bars in, so it gets longer to
+    // prove itself.
+    const hold = settings.ambient === "swan" ? 9000 : 4000;
     ambientStopId = setTimeout(function () {
       ambientStopId = null;
       if (!ambientWanted()) stopAmbientNodes();
-    }, 4000);
+    }, hold);
   }
 
   /* ---------- timer ---------- */
