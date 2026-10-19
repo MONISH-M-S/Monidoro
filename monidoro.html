@@ -634,6 +634,31 @@
   .task-up:not(:disabled):hover, .task-down:not(:disabled):hover{
     color:var(--accent);
   }
+
+  /* The estimate and the day are details about a task rather than the task
+     itself, so they share a box: on a wide row it sits inline, and on a narrow
+     one it drops under the name where there is room for it. */
+  .task-meta{display:flex; align-items:center; gap:6px; flex:0 0 auto}
+  /* A day is one tap: press it for today, press it again to take it off. */
+  .task-today{
+    flex:0 0 auto; min-width:0; height:22px; padding:0 8px;
+    font-size:.64rem; font-weight:600; border-radius:999px;
+    background:transparent; border:1px solid var(--line); color:var(--mut);
+  }
+  .task-today[aria-pressed="true"]{
+    background:var(--accent); border-color:var(--accent); color:var(--bg);
+  }
+  /* Which slice of the list is on screen. Hidden until anything is planned, so
+     the dialog does not offer an empty view. */
+  .task-filter{display:flex; gap:6px; margin:0 0 9px}
+  .task-filter[hidden]{display:none}
+  .task-filter button{
+    min-width:0; padding:4px 11px; font-size:.7rem; border-radius:999px;
+    background:transparent; border:1px solid var(--line); color:var(--mut);
+  }
+  .task-filter button[aria-pressed="true"]{
+    background:var(--accent); border-color:var(--accent); color:var(--bg);
+  }
   .task-text{
     flex:1 1 auto; min-width:0; width:0; padding:5px 4px; font:inherit;
     font-size:.8rem; border:0; border-radius:6px;
@@ -667,10 +692,14 @@
      closer together, and the panel gives back some of its own margin. */
   @media (max-width:400px){
     #tasksModal .modal-panel{padding-left:10px; padding-right:10px}
-    .task{gap:4px}
+    .task{gap:4px; flex-wrap:wrap}
     .task-pick, .task-done, .task-del, .task-indent{flex-basis:24px}
     .task-est{flex-basis:38px}
     .task[data-depth="1"]{margin-left:14px}
+    /* The estimate and the day move to a line of their own, under the name.
+       84px is the three controls and their gaps, so the second line starts
+       where the name does. */
+    .task-meta{flex:0 0 100%; padding-left:84px}
   }
 
   .task-actions{display:flex; gap:6px; margin-top:12px}
@@ -994,6 +1023,12 @@
       <button type="button" id="taskAddBtn">Add</button>
     </div>
 
+    <div class="task-filter" id="taskFilter" hidden role="group"
+         aria-label="Which tasks to show">
+      <button type="button" id="taskShowAll" aria-pressed="true">All</button>
+      <button type="button" id="taskShowToday" aria-pressed="false">Today</button>
+    </div>
+
     <ul class="task-list" id="taskList"></ul>
 
     <div class="task-actions" id="taskActions" hidden>
@@ -1174,6 +1209,22 @@
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return d.getFullYear() + "-" + month + "-" + day;
+  }
+
+  // The day a task is planned for, in the same local key the history uses, so
+  // a plan and a session can never disagree about which day it is.
+  function todayKey() {
+    return dateKey(new Date());
+  }
+
+  // A stored day must be a real local date: a pattern match alone would accept
+  // 2026-02-31, which Date rolls over to the 3rd of March, and a day that is
+  // not the day it says it is would be worse than no day at all.
+  function dayKeyOrEmpty(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+    const date = new Date(value + "T00:00:00");
+    if (Number.isNaN(date.getTime())) return "";
+    return dateKey(date) === value ? value : "";
   }
 
   function keyFor(year, monthIndex, day) {
@@ -1566,7 +1617,8 @@
         done: item.done === true,
         depth: clampInt(item.depth, 0, TASK_DEPTH_MAX, 0),
         est: clampInt(item.est, 0, TASK_EST_MAX, 0),
-        used: clampInt(item.used, 0, TASK_USED_MAX, 0)
+        used: clampInt(item.used, 0, TASK_USED_MAX, 0),
+        day: dayKeyOrEmpty(item.day)
       });
     });
 
@@ -1697,6 +1749,9 @@
     tasksClose: document.getElementById("tasksClose"),
     taskInput: document.getElementById("taskInput"),
     taskAddBtn: document.getElementById("taskAddBtn"),
+    taskFilter: document.getElementById("taskFilter"),
+    taskShowAll: document.getElementById("taskShowAll"),
+    taskShowToday: document.getElementById("taskShowToday"),
     taskList: document.getElementById("taskList"),
     taskActions: document.getElementById("taskActions"),
     taskClearDone: document.getElementById("taskClearDone"),
@@ -4262,6 +4317,11 @@
   // cannot type in.
   let taskMoveMode = false;
 
+  // True while the dialog is showing today's slice of the list rather than all
+  // of it. Not stored either, but it does survive closing the dialog: a day's
+  // plan is a place you come back to, not a mode you re-enter.
+  let taskTodayOnly = false;
+
   // The one task a finished focus session is counted against, or "" for none.
   // Looked up through the list every time rather than cached, so a deletion can
   // never leave a stale task behind.
@@ -4377,12 +4437,13 @@
     if (row) renderTaskCount(row, task);
   }
 
-  function addTask(text) {
+  function addTask(text, day) {
     const trimmed = text.trim().slice(0, TASK_TEXT_MAX);
     if (!trimmed || tasks.items.length >= TASK_MAX) return null;
 
     const task = {
-      id: uniqueTaskId(), text: trimmed, done: false, depth: 0, est: 0, used: 0
+      id: uniqueTaskId(), text: trimmed, done: false, depth: 0, est: 0, used: 0,
+      day: dayKeyOrEmpty(day)
     };
     tasks.items.push(task);
     // The first task added becomes the one you are working on: adding a task and
@@ -4479,6 +4540,40 @@
     return blocks;
   }
 
+  // The blocks today's view shows: one is in if the task or any of its subtasks
+  // is planned for today, and it is shown whole, because a subtask without the
+  // task above it is not a shape this list has.
+  function visibleBlocks() {
+    const blocks = orderedBlocks();
+    if (!taskTodayOnly) return blocks;
+    const key = todayKey();
+    return blocks.filter(function (block) {
+      return block.some(function (task) { return task.day === key; });
+    });
+  }
+
+  function visibleTasks() {
+    return [].concat.apply([], visibleBlocks());
+  }
+
+  // One tap plans a task for today, the next takes it off again. The day it is
+  // planned for is stored rather than a yes/no, so nothing has to be swept up at
+  // midnight: yesterday's plan simply stops being today's.
+  function toggleTaskToday(id) {
+    const task = taskById(id);
+    if (!task) return;
+    task.day = task.day === todayKey() ? "" : todayKey();
+    saveTasks();
+    const wasTodayView = taskTodayOnly;
+    renderTasks();
+    // In today's view the row is gone the moment it is unplanned, so the chip
+    // that is still on screen is what deserves the focus. If unplanning the
+    // last task emptied today's slice, fall back to All and focus its chip.
+    if (wasTodayView && !taskTodayOnly) el.taskShowAll.focus();
+    else if (wasTodayView) el.taskShowToday.focus();
+    else focusInTask(id, "task-today");
+  }
+
   // A finished task cannot be the one you are working on, so it lets go of the
   // pointer on the way out. The sessions it already earned stay on it.
   function toggleTaskDone(id) {
@@ -4544,8 +4639,10 @@
     }
 
     // The row is what you drag, but a field inside it keeps its own behaviour,
-    // so selecting text in a name is still selecting text.
-    row.draggable = true;
+    // so selecting text in a name is still selecting text. Today's view is a
+    // slice of the list, so nothing is dragged from it: a block dropped past a
+    // row that is not on screen would land somewhere nobody could see.
+    row.draggable = !taskTodayOnly;
 
     const pick = document.createElement("button");
     pick.type = "button";
@@ -4582,7 +4679,7 @@
     indent.className = "task-indent";
     const isSub = task.depth === 1;
     indent.textContent = isSub ? "\u21e4" : "\u21e5";
-    indent.disabled = !isSub && !canIndent(task);
+    indent.disabled = taskTodayOnly || (!isSub && !canIndent(task));
     indent.title = isSub
       ? "Move this out to a task of its own"
       : (indent.disabled
@@ -4611,6 +4708,9 @@
     text.addEventListener("blur", function () { text.value = task.text; });
     row.appendChild(text);
 
+    const meta = document.createElement("div");
+    meta.className = "task-meta";
+
     const est = document.createElement("input");
     est.type = "number";
     est.className = "task-est";
@@ -4620,7 +4720,27 @@
     est.placeholder = "est";
     est.title = "How many focus sessions you expect this to take";
     est.setAttribute("aria-label", "Focus sessions estimated for this task");
-    row.appendChild(est);
+    meta.appendChild(est);
+
+    // One tap plans a task for today; the same tap takes it off. What is stored
+    // is the date rather than a flag, so a plan left over from yesterday can say
+    // so instead of quietly reading "Today" forever.
+    const today = document.createElement("button");
+    today.type = "button";
+    today.className = "task-today";
+    const planned = task.day === todayKey();
+    today.textContent = task.day && !planned ? shortDay(task.day) : "Today";
+    today.setAttribute("aria-pressed", String(planned));
+    today.title = planned
+      ? "Take this off today's list"
+      : (task.day
+        ? "Planned for " + shortDay(task.day) + " - plan it for today"
+        : "Plan this for today");
+    today.setAttribute("aria-label", today.title + ": " + task.text);
+    today.addEventListener("click", function () { toggleTaskToday(task.id); });
+    meta.appendChild(today);
+
+    row.appendChild(meta);
 
     const count = document.createElement("span");
     count.className = "task-count";
@@ -4872,8 +4992,18 @@
     // say below that and must not be left on when a deletion crosses the line.
     if (taskMoveMode && tasks.items.length < 2) taskMoveMode = false;
 
+    // The filter bar appears once something is planned for today, and today's
+    // slice cannot show nothing: if nothing is planned, fall back to All.
+    const plannedToday = tasks.items.some(function (task) {
+      return task.day === todayKey();
+    });
+    el.taskFilter.hidden = !plannedToday || taskMoveMode;
+    if (!plannedToday) taskTodayOnly = false;
+    el.taskShowAll.setAttribute("aria-pressed", String(!taskTodayOnly));
+    el.taskShowToday.setAttribute("aria-pressed", String(taskTodayOnly));
+
     el.taskList.textContent = "";
-    tasks.items.forEach(function (task) {
+    (taskTodayOnly ? visibleTasks() : tasks.items).forEach(function (task) {
       el.taskList.appendChild(buildTaskRow(task));
     });
 
@@ -4958,7 +5088,8 @@
 
   function addTaskFromInput() {
     const full = tasks.items.length >= TASK_MAX;
-    const task = addTask(el.taskInput.value);
+    // A task added while looking at today's slice is planned for today.
+    const task = addTask(el.taskInput.value, taskTodayOnly ? todayKey() : "");
     // Emptying and refocusing the field is what makes five tasks in a row
     // bearable: type, Enter, type, Enter.
     el.taskInput.value = "";
@@ -4996,6 +5127,14 @@
   el.taskCurrent.addEventListener("click", openTasks);
   el.tasksClose.addEventListener("click", closeTasks);
   el.taskAddBtn.addEventListener("click", addTaskFromInput);
+  el.taskShowAll.addEventListener("click", function () {
+    taskTodayOnly = false;
+    renderTasks();
+  });
+  el.taskShowToday.addEventListener("click", function () {
+    taskTodayOnly = true;
+    renderTasks();
+  });
   el.taskMove.addEventListener("click", function () {
     setTaskMoveMode(!taskMoveMode);
   });
