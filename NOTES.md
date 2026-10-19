@@ -23,6 +23,12 @@ Lake focus noises to play the real recordings. Both are strictly optional — wi
 either file missing, that choice falls back to the app's own synthesised melody,
 so a copy of the HTML on its own still makes every sound it ever did.
 
+Music of your own is read from beside the page rather than uploaded:
+`focus-music-1.ogg`, then `focus-music-2.ogg` and on for a playlist (`.mp3`,
+`.m4a` and `.wav` are accepted too). Nothing is needed for the app to work —
+those names are looked for only when the choice is actually used, and with none
+of them there it falls back to the synthesised melody as well.
+
 The file was called `monodoro.html` until the app was renamed. If a browser
 stored its data against the old *file path* rather than against `file://` as a
 whole, opening the renamed file starts with an empty history — recover with the
@@ -64,6 +70,13 @@ and pushed.
   transcription of the Scene, taken from the engraving's MusicXML (215 notes,
   182 s, looped), so the choice is never silent. One volume slider drives all of
   them. Plays only while a focus session runs
+- Music of your own as a focus sound: files kept beside the page are shuffled
+  when the session starts and played one after another, and a single file picked
+  by hand plays for that visit. Nothing is uploaded and nothing is stored: a
+  browser cannot remember a file it was handed, so music that survives a reload
+  is music with a name the app can look up again. The chip opens the picker by
+  itself when there is nothing to play, and with no file at all the choice falls
+  back to the synthesised melody rather than to silence
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -303,7 +316,7 @@ by accident:
     volume, about 14 dB below a normal track, and a band-limited 1933 mono
     transfer sounds fainter still at the same RMS — it was reported straight away
     as "the volume was low". The recording therefore gets
-    `swanRecordingVolume()`, where the slider *is* the element volume. Loudness is
+    `recordingVolume()`, where the slider *is* the element volume. Loudness is
     a judgement, so check it by ear and not only by RMS. The corollary is that a
     transfer *quieter* than the current one cannot be fixed in the app at all:
     volume stops at 1.00, so giving it extra gain would only buy dead travel at
@@ -387,6 +400,25 @@ by accident:
     photo write is read back and checked; a setting is not worth that ceremony,
     but a user's picture is.
 
+21. **A page cannot list a folder, so finding a file by name costs failed
+    requests.** The user's music is looked for by asking for names —
+    `focus-music-1.ogg`, `.mp3`, `.m4a`, `.wav`, then `focus-music-2.…` — and
+    eight of those come back 404 when there is nothing there at all. So the scan
+    runs only when the choice is used or the drawer opens, it stops at the first
+    number with no file whatsoever (numbering has to be consecutive, which is why
+    the drawer reports a count: a gap is then visible rather than mysterious), and
+    a probe that neither loads nor fails is treated as absent instead of being
+    allowed to hold the scan open. Anything added while the page is open is only
+    noticed after a reload.
+
+22. **A page cannot remember a file the user picked.** A blob URL from
+    `URL.createObjectURL` plays perfectly and dies with the document, the File
+    System Access API does not exist where this app actually lives (`file://`),
+    and a whole album will never fit in `localStorage`. That is why music you own
+    is played from named companion files — the same reason the two Swan Lake
+    transfers sit next to the HTML — and why a picked file is labelled as lasting
+    for the visit instead of pretending otherwise.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -403,6 +435,17 @@ would. Then the stored data URL is decoded back to check its dimensions, and the
 refusal paths get a text file and a 1920 px field of random noise (which no JPEG
 can squeeze under the cap). Reload, remove and re-import are checked as separate
 steps, because "it worked once" is not what this file is trying to prove.
+
+The music a user owns was driven the same way, with `play` and `pause` spied on
+before any chip was pressed, so every claim is a recorded event rather than an
+inference: the bundled track starts when a focus session starts, stops when the
+break begins and comes back on the next focus. The scan was timed and counted
+over the server log (eight requests, then four per track, four at the end), the
+shuffle was run more than once to see a different track open the session, the
+picked file went in through the real input, a text file was refused, and the
+folder with only the HTML in it was run to prove the empty case: every missing
+recording fell back to the synthesised melody and the empty chip opened its
+picker.
 
 Keep that bar. It has already paid for itself twice.
 

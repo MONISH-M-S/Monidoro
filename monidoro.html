@@ -564,10 +564,26 @@
           <button type="button" data-ambient="rain">Rain</button>
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
+          <button type="button" data-ambient="mine">Your music</button>
           <button type="button" data-ambient="swan">Swan Lake Vintage</button>
           <button type="button" data-ambient="swanArchive">Swan Lake European</button>
         </div>
         <p class="hint">Plays only while a focus session runs. Picking one previews it.</p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Your own music</span>
+        <div class="btn-row">
+          <button type="button" id="ownMusicBtn">Play a file</button>
+          <button type="button" id="ownMusicClear" hidden>Stop using it</button>
+        </div>
+        <input type="file" id="ownMusicFile" accept="audio/*" hidden>
+        <p class="hint" id="ownMusicHint">
+          Your music is looked for beside this file, never uploaded:
+          focus-music.ogg, or focus-music-1.ogg and consecutive numbers after it
+          for a playlist (.mp3, .m4a and .wav work too). A file you pick plays
+          for this visit only, because a browser cannot remember a file you chose.
+        </p>
       </div>
 
       <div class="field">
@@ -682,7 +698,9 @@
   // companion file; everything else still works from a single file offline.
   // "swan" and "swanArchive" are two transfers of the same music, described
   // where their files are named further down.
-  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan", "swanArchive"];
+  const AMBIENT_KEYS = [
+    "off", "rain", "deep", "cafe", "mine", "swan", "swanArchive"
+  ];
 
   // Backdrops are either a built-in CSS gradient - no file, so they work from
   // file:// and cost nothing - or a photo of the user's own, which is shrunk
@@ -1206,6 +1224,10 @@
     photoDimField: document.getElementById("photoDimField"),
     photoFile: document.getElementById("photoFile"),
     photoHint: document.getElementById("photoHint"),
+    ownMusicBtn: document.getElementById("ownMusicBtn"),
+    ownMusicClear: document.getElementById("ownMusicClear"),
+    ownMusicFile: document.getElementById("ownMusicFile"),
+    ownMusicHint: document.getElementById("ownMusicHint"),
     tagRow: document.getElementById("tagRow"),
     tagList: document.getElementById("tagList"),
     addTagBtn: document.getElementById("addTagBtn"),
@@ -1779,47 +1801,69 @@
     return { master: master, limiter: limiter };
   }
 
-  // The real thing: the Scene played by an orchestra, bundled as files beside
-  // this one. They play through a plain media element rather than the Web Audio
-  // graph above, because routing a media element through a graph taints it when
-  // the page is opened from file:// - and a tainted source is silence.
+  // The real thing: music bundled as files beside this one. Recordings play
+  // through a plain media element rather than the Web Audio graph above, because
+  // routing a media element through a graph taints it when the page is opened
+  // from file:// - and a tainted source is silence.
   //
-  // Two transfers are offered, told apart by age rather than by music: the
-  // vintage one is the Scene on its own (Barbirolli, 1933), and the European
-  // one (European Archive) plays on into the rest of Act II. Both were levelled
-  // to the same loudness when they were prepared - measured, not guessed - so
-  // switching between them does not call for a different slider position.
+  // Two transfers of the Swan Lake Scene are offered, told apart by age rather
+  // than by music: the vintage one is the Scene on its own (Barbirolli, 1933),
+  // and the European one (European Archive) plays on into the rest of Act II.
+  // They were levelled to the same loudness when they were prepared - measured,
+  // not guessed - so switching between them does not call for a different slider
+  // position.
   //
-  // Tchaikovsky's music is public domain, and so are both transfers (see
-  // NOTES.md for the credits). If a file is missing or will not decode, the
-  // synthesised melody below takes over, so the choice is never simply silent.
-  const SWAN_RECORDINGS = {
+  // Tchaikovsky's music is public domain and so are both transfers (see NOTES.md
+  // for the credits). If a file is missing or will not decode, the synthesised
+  // melody below takes over, so a choice is never simply silent.
+  const RECORDINGS = {
     swan: "swan-lake.ogg",
     swanArchive: "swan-lake-archive.ogg"
   };
 
-  function isSwan(key) {
-    return Object.prototype.hasOwnProperty.call(SWAN_RECORDINGS, key);
+  // "mine" is the user's own music. It is looked for beside this page rather than
+  // uploaded, because a page cannot remember a file the user picked: the only
+  // music that survives a reload is music the page can find again by name.
+  // focus-music.ogg on its own, or focus-music-1.ogg and consecutive numbers
+  // after it for a playlist. A file picked by hand plays for the visit only.
+  const OWN_KEY = "mine";
+  const OWN_EXTENSIONS = ["ogg", "mp3", "m4a", "wav"];
+  const OWN_MAX_TRACKS = 40;
+
+  function isRecording(key) {
+    return key === OWN_KEY || Object.prototype.hasOwnProperty.call(RECORDINGS, key);
   }
 
-  // The recording deliberately does not share the noises' gain curve. That curve
-  // tops out at 0.28 because a stack of noise layers adds up, and matching the
+  function isOwn(key) {
+    return key === OWN_KEY;
+  }
+
+  // Recordings deliberately do not share the noises' gain curve. That curve tops
+  // out at 0.28 because a stack of noise layers adds up, and matching the
   // transfer's RMS to it left the default 40% at 0.19 volume - measured, about
   // 14 dB below a normal track, with a band-limited 1933 mono transfer sounding
   // fainter still at the same RMS. So the slider is the element's own volume
   // instead: quiet at the bottom, a normal listening level at the top, and no
   // dead travel at the end of the slider.
-  function swanRecordingVolume() {
+  function recordingVolume() {
     return Math.min(1, settings.ambientVolume / 100);
   }
 
-  // One element per recording, made once and kept: two elements can then never
+  // One element per source, made once and kept: two elements can then never
   // fight over which file the shared playback state belongs to.
-  const swanElements = {};
-  const swanFailed = {};
+  const recordingElements = {};
+  const recordingFailed = {};
 
-  function swanRecordingElement(key) {
-    if (swanElements[key]) return swanElements[key];
+  // The user's own music, filled in lazily by the scan below. Null means "not
+  // looked for yet", which is different from "looked for and found nothing".
+  let ownTracks = null;
+  let ownPickedSrc = null;
+  let ownPickedName = "";
+  let ownOrder = null;
+  let ownIndex = 0;
+
+  function recordingElement(src) {
+    if (recordingElements[src]) return recordingElements[src];
 
     const el = new Audio();
     el.loop = true;
@@ -1828,21 +1872,36 @@
     // melody takes over - but only when the recording is the thing that failed
     // while playing.
     el.addEventListener("error", function () {
-      swanFailed[key] = true;
-      if (ambientNodes && ambientNodes.el === el) {
-        ambientNodes = null;
-        el.pause();
-        if (audioCtx) startSwanPlayer();
+      recordingFailed[src] = true;
+      if (!ambientNodes || ambientNodes.el !== el) return;
+      ambientNodes = null;
+      el.pause();
+      // A track of the user's own that will not decode drops out of the run and
+      // the next one starts; when the last has gone the melody takes over.
+      if (isOwn(settings.ambient) && ownOrder && ownOrder.length > 1) {
+        ownIndex = (ownIndex + 1) % ownOrder.length;
+        playOwnTrack();
+        return;
       }
+      if (audioCtx) startSwanPlayer();
     });
-    el.src = SWAN_RECORDINGS[key];
-    swanElements[key] = el;
+    // A single track loops through the element itself, so this only ever fires
+    // for a run of several: it is how the album moves on.
+    el.addEventListener("ended", function () {
+      if (!ambientNodes || ambientNodes.el !== el) return;
+      if (!ownOrder || ownOrder.length < 2) return;
+      ownIndex = (ownIndex + 1) % ownOrder.length;
+      playOwnTrack();
+    });
+    el.src = src;
+    recordingElements[src] = el;
     return el;
   }
 
-  function startSwanRecording(key) {
-    const el = swanRecordingElement(key);
-    el.volume = swanRecordingVolume();
+  function startRecording(src, loop) {
+    const el = recordingElement(src);
+    el.loop = loop !== false;
+    el.volume = recordingVolume();
     // Rewind, so every focus session opens on the same bars instead of picking up
     // wherever the last one happened to stop.
     try { el.currentTime = 0; } catch (err) { /* not seekable yet */ }
@@ -1858,18 +1917,144 @@
     }
   }
 
+  /* ---------- the user's own music ---------- */
+
+  // A file that is not there costs one failed request, so the scan stops at the
+  // first number with no file at all: numbering has to run without gaps, and the
+  // drawer reports what was found so a gap is visible rather than mysterious.
+  function probeAudio(src, done) {
+    const probe = new Audio();
+    let settled = false;
+    function settle(ok) {
+      if (settled) return;
+      settled = true;
+      probe.removeAttribute("src");
+      probe.load();
+      done(ok);
+    }
+    probe.preload = "metadata";
+    probe.addEventListener("loadedmetadata", function () { settle(true); });
+    probe.addEventListener("error", function () { settle(false); });
+    probe.src = src;
+    // A read that neither loads nor fails is treated as absent rather than being
+    // allowed to hold the scan up forever.
+    setTimeout(function () { settle(false); }, 4000);
+  }
+
+  function scanOwnMusic(done) {
+    const found = [];
+    let number = 1;
+
+    function probeNumber() {
+      if (number > OWN_MAX_TRACKS) { ownTracks = found; done(found); return; }
+
+      const names = [];
+      if (number === 1) {
+        OWN_EXTENSIONS.forEach(function (ext) { names.push("focus-music." + ext); });
+      }
+      OWN_EXTENSIONS.forEach(function (ext) {
+        names.push("focus-music-" + number + "." + ext);
+      });
+
+      let cursor = 0;
+      let hits = 0;
+      function probeNext() {
+        if (cursor >= names.length) {
+          if (!hits) { ownTracks = found; done(found); return; }
+          number += 1;
+          probeNumber();
+          return;
+        }
+        const src = names[cursor];
+        cursor += 1;
+        probeAudio(src, function (ok) {
+          if (ok) { hits += 1; found.push(src); }
+          probeNext();
+        });
+      }
+      probeNext();
+    }
+
+    probeNumber();
+  }
+
+  // Looking beside the page costs a handful of failed requests when there is
+  // nothing there, so the scan waits until something actually asks about the
+  // user's music - and callers that arrive while it is running queue up behind
+  // it rather than starting a second one.
+  let ownScanning = false;
+  const ownScanWaiters = [];
+
+  function ensureOwnMusic(done) {
+    if (ownTracks) { done(ownTracks); return; }
+    ownScanWaiters.push(done);
+    if (ownScanning) return;
+    ownScanning = true;
+    scanOwnMusic(function (found) {
+      ownScanning = false;
+      const waiters = ownScanWaiters.slice();
+      ownScanWaiters.length = 0;
+      waiters.forEach(function (fn) { fn(found); });
+    });
+  }
+
+  function ownSources() {
+    if (ownPickedSrc) return [ownPickedSrc];
+    return (ownTracks || []).slice();
+  }
+
+  function shuffled(list) {
+    for (let i = list.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const swap = list[i];
+      list[i] = list[j];
+      list[j] = swap;
+    }
+    return list;
+  }
+
+  // The user's music plays as a run rather than one file looped: shuffled once
+  // when the session starts, so a long album feels different each time but never
+  // jumps about mid-track. A single file just loops.
+  function startOwnMusic() {
+    const playable = ownSources().filter(function (src) {
+      return !recordingFailed[src];
+    });
+    if (!playable.length) {
+      if (audioCtx) startSwanPlayer();
+      return;
+    }
+    ownOrder = shuffled(playable);
+    ownIndex = 0;
+    playOwnTrack();
+  }
+
+  function playOwnTrack() {
+    if (!ownOrder || !ownOrder.length) return;
+    startRecording(ownOrder[ownIndex], ownOrder.length === 1);
+  }
+
   function startAmbientNodes() {
     if (ambientNodes) return;
-    if (isSwan(settings.ambient)) {
+    if (isRecording(settings.ambient)) {
       // A recording is tried first because it needs no audio graph at all, so it
       // plays even where Web Audio is unavailable; the melody is the fallback,
       // not the other way round.
-      if (!swanFailed[settings.ambient]) {
-        startSwanRecording(settings.ambient);
+      if (isOwn(settings.ambient)) {
+        if (ownPickedSrc || ownTracks) { startOwnMusic(); return; }
+        // The scan costs a few failed requests when there is nothing to find, so
+        // it only runs when the choice is actually used.
+        ensureOwnMusic(function () {
+          if (settings.ambient === OWN_KEY && ambientWanted()) startOwnMusic();
+        });
         return;
       }
-      if (!audioCtx) return;
-      startSwanPlayer();
+      const src = RECORDINGS[settings.ambient];
+      if (recordingFailed[src]) {
+        if (audioCtx) startSwanPlayer();
+        return;
+      }
+      startRecording(src, true);
       return;
     }
     if (!audioCtx) return;
@@ -2007,7 +2192,7 @@
   function applyAmbientVolume() {
     if (!ambientNodes) return;
     if (ambientNodes.el) {
-      ambientNodes.el.volume = swanRecordingVolume();
+      ambientNodes.el.volume = recordingVolume();
       return;
     }
     ambientNodes.master.gain.value = ambientGain() * ambientNodes.trim;
@@ -2038,8 +2223,8 @@
     cancelAmbientStop();
     // A noise makes its character known in a moment; the Scene opens with a harp
     // arpeggio and only reaches the tune a few bars in, so it gets longer to
-    // prove itself.
-    const hold = isSwan(settings.ambient) ? 9000 : 4000;
+    // prove itself. Music in general is judged over bars rather than seconds.
+    const hold = isRecording(settings.ambient) ? 9000 : 4000;
     ambientStopId = setTimeout(function () {
       ambientStopId = null;
       if (!ambientWanted()) stopAmbientNodes();
@@ -2348,6 +2533,14 @@
       saveSettings();
       ensureAudio();
       renderAmbientChoice();
+      // With nothing to play, "Your music" opens the picker - the same courtesy
+      // the empty Photo tile pays. It stays chosen if the picker is dismissed,
+      // and the melody covers for it rather than silence.
+      if (btn.dataset.ambient === OWN_KEY && !ownPickedSrc) {
+        ensureOwnMusic(function (found) {
+          if (!found.length && settings.ambient === OWN_KEY) el.ownMusicFile.click();
+        });
+      }
       // Tear down whatever was playing first: switching mid-session has to
       // change the sound, not keep the old one running under the new label.
       stopAmbientNodes();
@@ -2811,6 +3004,74 @@
     applyBackdrop();
   });
 
+  /* ---------- your own music ---------- */
+
+  const OWN_MUSIC_HINT = el.ownMusicHint.textContent.trim().replace(/\s+/g, " ");
+
+  // The same shape as the photo hint: the paragraph carries the explanation, and
+  // a status line stands in for it until the next state change says otherwise.
+  function ownMusicStatus(message, state) {
+    el.ownMusicHint.textContent = message || OWN_MUSIC_HINT;
+    if (state) el.ownMusicHint.setAttribute("data-state", state);
+    else el.ownMusicHint.removeAttribute("data-state");
+  }
+
+  function renderOwnMusic() {
+    el.ownMusicClear.hidden = !ownPickedSrc;
+    if (ownPickedSrc) {
+      ownMusicStatus("Playing " + ownPickedName + " for this visit.");
+      return;
+    }
+    if (!ownTracks) {
+      ownMusicStatus("Looking for music beside this page...");
+      return;
+    }
+    const found = ownTracks.length;
+    ownMusicStatus(found
+      ? "Found " + found + (found === 1 ? " track" : " tracks") +
+        ", played shuffled while you focus."
+      : "");
+  }
+
+  el.ownMusicBtn.addEventListener("click", function () {
+    el.ownMusicFile.click();
+  });
+
+  el.ownMusicClear.addEventListener("click", function () {
+    if (ownPickedSrc) URL.revokeObjectURL(ownPickedSrc);
+    ownPickedSrc = null;
+    ownPickedName = "";
+    renderOwnMusic();
+    ensureOwnMusic(renderOwnMusic);
+    // Back to the named files, mid-session if one is running.
+    if (running && isOwn(settings.ambient)) {
+      stopAmbientNodes();
+      syncAmbient();
+    }
+  });
+
+  el.ownMusicFile.addEventListener("change", function () {
+    const file = el.ownMusicFile.files && el.ownMusicFile.files[0];
+    // Resetting the input means choosing the same file twice still fires change.
+    el.ownMusicFile.value = "";
+    if (!file) return;
+    if (!/^audio\//.test(file.type || "")) {
+      ownMusicStatus("That file is not audio.", "err");
+      return;
+    }
+    if (ownPickedSrc) URL.revokeObjectURL(ownPickedSrc);
+    ownPickedSrc = URL.createObjectURL(file);
+    // A song title can be long and the status line is one line.
+    ownPickedName = file.name.slice(0, 48);
+    settings.ambient = OWN_KEY;
+    saveSettings();
+    renderAmbientChoice();
+    renderOwnMusic();
+    // Play it now: choosing a track is not the moment to wait for a session.
+    stopAmbientNodes();
+    if (running) syncAmbient(); else previewAmbient();
+  });
+
   /* ---------- presets ---------- */
 
   const presetButtons = Array.prototype.slice.call(
@@ -2929,6 +3190,10 @@
   function openSettings() {
     el.settingsPanel.hidden = false;
     el.settingsClose.focus();
+    // The scan for the user's own music is worth doing only when the panel that
+    // reports it is open, and it is cheap after the first time.
+    renderOwnMusic();
+    ensureOwnMusic(renderOwnMusic);
   }
 
   function closeSettings() {
