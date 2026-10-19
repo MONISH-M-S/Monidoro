@@ -648,6 +648,16 @@
   .task-today[aria-pressed="true"]{
     background:var(--accent); border-color:var(--accent); color:var(--bg);
   }
+  /* A task's tag: the tag's own colour as text and border, measured to carry,
+     so a small pill stays readable in either theme. "None" is plain. */
+  .task-tag{
+    flex:0 0 auto; min-width:0; height:22px; padding:0 8px;
+    font-size:.64rem; font-weight:600; border-radius:999px;
+    background:transparent; border:1px solid var(--line); color:var(--mut);
+  }
+  .task-tag[aria-pressed="true"]{
+    border-color:var(--tag); color:var(--tag);
+  }
   /* Which slice of the list is on screen. Hidden until anything is planned, so
      the dialog does not offer an empty view. */
   .task-filter{display:flex; gap:6px; margin:0 0 9px}
@@ -1618,7 +1628,11 @@
         depth: clampInt(item.depth, 0, TASK_DEPTH_MAX, 0),
         est: clampInt(item.est, 0, TASK_EST_MAX, 0),
         used: clampInt(item.used, 0, TASK_USED_MAX, 0),
-        day: dayKeyOrEmpty(item.day)
+        day: dayKeyOrEmpty(item.day),
+        // A task is filed under one of the configured tags, or none. A tag that
+        // has since been deleted leaves the task untagged rather than pointing
+        // at something that no longer exists.
+        tag: typeof item.tag === "string" && tagById(item.tag) ? item.tag : ""
       });
     });
 
@@ -3443,7 +3457,11 @@
     if (settings.activeTag === id) settings.activeTag = "";
     if (sessionTag === id) sessionTag = "";
     if (calTag === id) calTag = "";
+    // A task filed under the removed tag becomes untagged: the work stays, the
+    // label does not.
+    tasks.items.forEach(function (task) { if (task.tag === id) task.tag = ""; });
     saveSettings();
+    saveTasks();
     renderTagEditor();
     renderTags();
     renderCalTags();
@@ -4443,7 +4461,7 @@
 
     const task = {
       id: uniqueTaskId(), text: trimmed, done: false, depth: 0, est: 0, used: 0,
-      day: dayKeyOrEmpty(day)
+      day: dayKeyOrEmpty(day), tag: ""
     };
     tasks.items.push(task);
     // The first task added becomes the one you are working on: adding a task and
@@ -4572,6 +4590,20 @@
     if (wasTodayView && !taskTodayOnly) el.taskShowAll.focus();
     else if (wasTodayView) el.taskShowToday.focus();
     else focusInTask(id, "task-today");
+  }
+
+  // Cycle a task through its tags: None, then each configured tag, then None
+  // again. A task's tag is independent of the session's tag - two sources of
+  // the same label is how they drift apart, so this never writes sessionTag.
+  function toggleTaskTag(id) {
+    const task = taskById(id);
+    if (!task) return;
+    const ids = [""].concat(settings.tags.map(function (tag) { return tag.id; }));
+    const at = ids.indexOf(task.tag);
+    task.tag = ids[(at + 1) % ids.length];
+    saveTasks();
+    renderTasks();
+    focusInTask(id, "task-tag");
   }
 
   // A finished task cannot be the one you are working on, so it lets go of the
@@ -4739,6 +4771,21 @@
     today.setAttribute("aria-label", today.title + ": " + task.text);
     today.addEventListener("click", function () { toggleTaskToday(task.id); });
     meta.appendChild(today);
+
+    // One tap cycles the task through its tags: None, then each configured tag.
+    // The tag is shown as text in the tag's own colour, which the palette
+    // passes measured to carry, so a small coloured pill stays readable.
+    const tagBtn = document.createElement("button");
+    tagBtn.type = "button";
+    tagBtn.className = "task-tag";
+    const tag = task.tag ? tagById(task.tag) : null;
+    tagBtn.textContent = tag ? tag.name : "None";
+    tagBtn.setAttribute("aria-pressed", String(Boolean(tag)));
+    tagBtn.title = tag ? "Remove the " + tag.name + " tag" : "Add a tag to this task";
+    tagBtn.setAttribute("aria-label", tagBtn.title + ": " + task.text);
+    if (tag) tagBtn.style.setProperty("--tag", toneVar(tag.color));
+    tagBtn.addEventListener("click", function () { toggleTaskTag(task.id); });
+    meta.appendChild(tagBtn);
 
     row.appendChild(meta);
 
@@ -5043,8 +5090,10 @@
     }
 
     const n = rolledCount(task);
+    const tag = task.tag ? tagById(task.tag) : null;
     el.taskCurrent.hidden = false;
-    el.taskCurrentText.textContent = task.text;
+    el.taskCurrentText.textContent = task.text +
+      (tag ? " \u00b7 " + tag.name : "");
     el.taskCurrentCount.textContent = taskCountText(task);
     el.taskCurrent.title = "Open your tasks";
     el.taskCurrent.setAttribute(
