@@ -1252,6 +1252,86 @@
     );
   }
 
+  /* ---------- tab title ---------- */
+
+  // The title is the only place a countdown can be read from another tab, so it
+  // carries the time *and* which session it is: when the title bar is all you
+  // can see, "Focus" or "Break" matters as much as the number.
+  const APP_TITLE = document.title;
+  // How long a finished session blinks in a hidden tab before the message simply
+  // stays put. Nothing depends on this beyond politeness - an endless interval in
+  // a tab nobody is looking at is not worth leaving behind.
+  const TITLE_FLASH_MS = 20000;
+
+  let titleDone = false;
+  let titleBlinkId = null;
+  let titleSettleId = null;
+
+  function countdownTitle() {
+    return running
+      ? format(left) + " " + MODE_LABELS[mode] + " - " + APP_TITLE
+      : APP_TITLE;
+  }
+
+  function renderTitle() {
+    // A finished session owns the title until it has been seen, so the countdown
+    // must not paint over it.
+    if (titleDone) return;
+    document.title = countdownTitle();
+  }
+
+  function stopTitleFlash() {
+    if (titleBlinkId) {
+      clearInterval(titleBlinkId);
+      titleBlinkId = null;
+    }
+    if (titleSettleId) {
+      clearTimeout(titleSettleId);
+      titleSettleId = null;
+    }
+    titleDone = false;
+  }
+
+  // A finished session takes the title over, but only in a tab nobody is looking
+  // at: that is the one case where the title is the only place the news can land,
+  // and a visible tab already has the sound, the confetti and the plant. Under
+  // reduced motion the news is set once instead of blinking.
+  function flashTitle(message) {
+    if (!document.hidden) return;
+    stopTitleFlash();
+    titleDone = true;
+    document.title = message;
+
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    let on = true;
+    titleBlinkId = setInterval(function () {
+      on = !on;
+      document.title = on ? message : countdownTitle();
+    }, 1000);
+    titleSettleId = setTimeout(function () {
+      clearInterval(titleBlinkId);
+      titleBlinkId = null;
+      titleSettleId = null;
+      // Settle on the message rather than the countdown: the message is what the
+      // glance at the tab is for, and the running timer is already in the dial.
+      document.title = message;
+    }, TITLE_FLASH_MS);
+  }
+
+  // Coming back to the tab means the news has been seen, or is about to be.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    stopTitleFlash();
+    renderTitle();
+  });
+  window.addEventListener("focus", function () {
+    stopTitleFlash();
+    renderTitle();
+  });
+
   function render() {
     const text = format(left);
     el.time.textContent = text;
@@ -1260,7 +1340,7 @@
     el.ring.style.strokeDashoffset = RING_LENGTH * (1 - left / total);
     document.body.classList.toggle("is-break", mode === "break");
     document.body.classList.toggle("is-longbreak", mode === "longbreak");
-    document.title = (running ? text + " - " : "") + "Monidoro";
+    renderTitle();
     el.skip.hidden = mode === "focus";
     renderCycles();
     renderPlant();
@@ -2127,12 +2207,15 @@
     render();
 
     if (done === "focus") {
+      const message = "Focus session complete";
       notify(
-        "Focus session complete",
+        message,
         mode === "longbreak" ? "Set complete - take a long break." : "Time for a break."
       );
+      flashTitle(message);
     } else {
       notify("Break over", "Back to focus.");
+      flashTitle("Break over");
     }
 
     autoId = setTimeout(function () {

@@ -72,6 +72,12 @@ and pushed.
   Both are left alone while a text field has focus, and while a button has focus
   Space is left to that button — except Start and Reset, which mean the same
   thing — so Tab to a noise chip and Space still presses the chip
+- The tab title carries the countdown and the kind of session it is ("12:34
+  Focus - Monidoro"), because for anyone working in another tab the title is the
+  only place the timer can be read. A finished session takes the title over too,
+  but only in a hidden tab - that is where the title is the one place the news
+  can land - blinking for 20 s and then staying put until the tab is returned to.
+  Reduced motion gets the message without the blinking
 - A desktop notification when a session ends ("Focus session complete" / "Break
   over"), asked for on the first start rather than at load. It is a bonus and
   never a promise: on `file://` the origin is opaque and the prompt may never
@@ -353,6 +359,14 @@ by accident:
     `transition` has not started yet: a perfectly good growth curve measures as
     `matrix(0,0,0,0,0,0)` and looks dead. Suspend the transitions, or wait, and
     only then believe a measurement.
+
+20. **Anything that owns the tab title has to say so.** `render()` repaints
+    `document.title` on every tick, so a completion message written straight to
+    the title lasted under a second and then vanished - a bug that never
+    happened, from the user's side. The message now takes the title with a flag
+    (`titleDone`) that the tick respects, and it hands the title back when the
+    tab becomes visible again. Same shape as the plant's `--grow`: state that
+    lives outside the render loop needs a way to outrank it.
 
 18. **`hidden` loses to any author rule that sets `display`.** The photo-dimming
     slider stayed on screen with no photo to dim, because `.field{display:block}`
