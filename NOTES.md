@@ -45,6 +45,10 @@ and pushed.
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
   filtered, plus the Swan Lake theme (Tchaikovsky, public domain) played as a
   looping melody, with a volume slider. Plays only while a focus session runs
+- Customize opens as a drawer from the right (it outgrew an inline panel) and
+  History as a centred dialog; both close on the backdrop, on Escape, and return
+  focus to the button that opened them. The drawer scrolls internally, because
+  the settings are taller than a short screen
 
 ## Storage keys (localStorage)
 
@@ -108,9 +112,9 @@ Two rules that must not be broken:
 - **Test the Notification API on `file://` before promising it works.** A file
   page has an opaque origin and the permission prompt may not appear at all.
   It is expected to work fine on GitHub Pages, if that ever happens.
-- Note the existing `keydown` listener that closes the calendar on `Escape`;
-  shortcuts must not fire while a text field has focus, or typing a name would
-  start and stop the timer.
+- Note the existing `keydown` listener that closes whichever overlay is open on
+  `Escape`; shortcuts must not fire while a text field has focus, or typing a
+  name would start and stop the timer.
 
 ### 8. Confetti + tree
 

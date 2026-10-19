@@ -122,11 +122,19 @@
     flex:1 1 0; min-width:0; padding:11px 10px; font-size:.82rem;
     background:transparent; border-style:dashed;
   }
-  .settings-panel{
-    margin-top:12px; padding:18px 16px; text-align:left;
-    border:1px solid var(--line); border-radius:10px; background:var(--card);
+  /* The settings have grown too big to sit inline under the timer, so they open
+     as a drawer from the right: the timer stays visible behind it, and the panel
+     scrolls on its own because the content is taller than a short screen. */
+  .drawer{position:fixed; inset:0; display:flex; justify-content:flex-end; z-index:10}
+  .drawer[hidden]{display:none}
+  .drawer-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45)}
+  .drawer-panel{
+    position:relative; width:100%; max-width:400px; height:100%;
+    padding:18px 16px 24px; overflow-y:auto; text-align:left;
+    background:var(--card); border-left:1px solid var(--line);
+    box-shadow:-18px 0 50px rgba(0,0,0,.28);
   }
-  .settings-panel[hidden]{display:none}
+  .drawer-close{position:absolute; top:12px; right:12px}
   .field{display:block; margin-bottom:18px}
   .field:last-of-type{margin-bottom:0}
   .field-label{
@@ -288,12 +296,17 @@
 
   <section class="panels">
     <div class="panel-buttons">
-      <button type="button" id="settingsToggle"
-              aria-expanded="false" aria-controls="settingsPanel">Customize</button>
+      <button type="button" id="settingsOpen" aria-haspopup="dialog">Customize</button>
       <button type="button" id="calendarOpen">History</button>
     </div>
+  </section>
 
-    <div class="settings-panel" id="settingsPanel" hidden>
+  <div class="drawer" id="settingsPanel" hidden>
+    <div class="drawer-backdrop" data-close="1"></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <button type="button" class="nav-btn drawer-close" id="settingsClose" aria-label="Close settings">&#10005;</button>
+      <div class="modal-head"><h2 id="settingsTitle">Settings</h2></div>
+
       <div class="field">
         <span class="field-label">Presets</span>
         <div class="btn-row" id="presetRow">
@@ -410,7 +423,7 @@
         Test mode: durations come from the address bar.
       </p>
     </div>
-  </section>
+  </div>
 
   <div class="stats">
     <div>Today: <b id="todaySessions">0</b> sessions &middot; <b id="todayMinutes">0</b> min</div>
@@ -909,7 +922,8 @@
     goalCount: document.getElementById("goalCount"),
     goalBar: document.getElementById("goalBar"),
     streaks: document.getElementById("streaks"),
-    settingsToggle: document.getElementById("settingsToggle"),
+    settingsOpen: document.getElementById("settingsOpen"),
+    settingsClose: document.getElementById("settingsClose"),
     settingsPanel: document.getElementById("settingsPanel"),
     focusInput: document.getElementById("focusInput"),
     breakInput: document.getElementById("breakInput"),
@@ -2116,11 +2130,21 @@
     renderGreeting();
   });
 
-  el.settingsToggle.addEventListener("click", function () {
-    const willOpen = el.settingsPanel.hidden;
-    el.settingsPanel.hidden = !willOpen;
-    el.settingsToggle.setAttribute("aria-expanded", String(willOpen));
-    el.settingsToggle.textContent = willOpen ? "Hide settings" : "Customize";
+  function openSettings() {
+    el.settingsPanel.hidden = false;
+    el.settingsClose.focus();
+  }
+
+  function closeSettings() {
+    el.settingsPanel.hidden = true;
+    el.settingsOpen.focus();
+  }
+
+  el.settingsOpen.addEventListener("click", openSettings);
+  el.settingsClose.addEventListener("click", closeSettings);
+
+  el.settingsPanel.addEventListener("click", function (event) {
+    if (event.target.dataset.close) closeSettings();
   });
 
   /* ---------- calendar ---------- */
@@ -2266,7 +2290,10 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && !el.calendarModal.hidden) closeCalendar();
+    if (event.key !== "Escape") return;
+    // Whichever overlay is open, Escape closes it.
+    if (!el.settingsPanel.hidden) closeSettings();
+    else if (!el.calendarModal.hidden) closeCalendar();
   });
 
   /* ---------- backup and restore ---------- */
