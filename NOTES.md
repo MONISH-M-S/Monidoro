@@ -33,9 +33,15 @@ of them there it falls back to the synthesised melody as well.
 The file was called `monodoro.html` until the app was renamed. If a browser
 stored its data against the old *file path* rather than against `file://` as a
 whole, opening the renamed file starts with an empty history — recover with the
-backup export/import. Whether `file://` storage is scoped per-file cannot be
-observed from automation, so it is untested; the old filename is still in git
-history if a copy is ever needed.
+backup export/import. The old filename is still in git history if a copy is ever
+needed. What is now *known*, from reading the user's own `file://` tab instead of
+guessing: storage works there, and it is its own bucket — the same browser held
+seven sessions against `http://127.0.0.1:8777` and none against `file://`, so the
+two never see each other's history. Whether `file://` is scoped per file or per
+directory is still unverified, which is why the rename advice above stands. The
+two recordings also load from disk with `readyState` 4 and their full durations
+(150.0 s and 250.1 s); a shorter reading earlier came from the dev server's range
+handling, not from the files.
 
 ## What exists today
 
@@ -61,7 +67,7 @@ and pushed.
   picture. Pure CSS and canvas means no files and nothing downloaded
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
-- Focus noise: rain / brown / cafe, synthesised from two noise buffers and
+- Focus sound: rain / brown / cafe, synthesised from two noise buffers and
   filtered, plus three real recordings, all looped and all through one volume
   slider: `swan-lake.ogg` ("Swan Lake Vintage" — Barbirolli, 1933, the Scene
   alone, 2:30), `swan-lake-archive.ogg` ("Swan Lake European" — European Archive,
@@ -175,15 +181,28 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-Nothing is queued. The three features that were planned here are done and
-described above: keyboard shortcuts with a completion notification (7), the
-plant with confetti (8), and backgrounds (9).
+Nothing here is half-finished. Everything asked for so far is in and described
+above: keyboard shortcuts with a completion notification (7), the plant with
+confetti (8), backgrounds (9), the countdown in the tab title (10), music from
+files of your own (11) and the bundled lofi track (12).
 
-One thing stays unverified: the completion notification on `file://`. The
-browser tool used to test everything else refuses `file://` URLs outright, so
-the only way to check it is by hand — double-click the file and finish a
-session. Every call is guarded (feature detection, permission check, `try`), so
-the worst case is that nothing appears and the alert sound carries the moment.
+The notification question on `file://` is **answered**, and the answer is that it
+does nothing there — see gotcha 23. Every call was already guarded, so it
+degrades to the alert sound rather than to an error, and only a real origin would
+ever prompt.
+
+What is worth doing next, in the order it was raised:
+
+- **A contrast pass over the backdrops.** The text has to stay readable over six
+  gradients and over any photo the user brings, and "looks fine in dark mode on
+  aurora" is not a measurement.
+- **More focus noises** — waves, wind, fire — synthesised in the page like rain
+  and cafe, so nothing new has to be downloaded or licensed.
+- **Deeper history statistics**: weekly bars, averages and per-tag trends on top
+  of the heatmap that is already there.
+- **A to-do list.** Asked for in one breath with "and stuff", so the shape is
+  still open: a checklist beside the timer, tasks that belong to sessions, or a
+  plan for the day. Decide the shape before writing any of it.
 
 Ideas raised along the way and deliberately not pursued, so nobody re-opens them
 by accident:
@@ -431,6 +450,14 @@ by accident:
     is played from named companion files — the same reason the two Swan Lake
     transfers sit next to the HTML — and why a picked file is labelled as lasting
     for the visit instead of pretending otherwise.
+
+23. **On `file://` the notification permission is permanently denied, and that is
+    fine.** Checked in a real `file://` tab rather than assumed: `Notification`
+    exists, `Notification.permission` reads `"denied"`, and asking resolves
+    without ever prompting, so `notify()` and `askToNotify()` return quietly
+    instead of throwing. Nothing needs fixing — but it does mean the alert sound
+    is the only signal in the app's real home, and that a GitHub Pages deployment
+    would behave differently, because that is a real origin and would prompt.
 
 ## How features were verified
 
