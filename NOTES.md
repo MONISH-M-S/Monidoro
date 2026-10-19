@@ -43,8 +43,9 @@ and pushed.
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, plus the Swan Lake theme (Tchaikovsky, public domain) played as a
-  looping melody, with a volume slider. Plays only while a focus session runs
+  filtered, plus the whole Swan Lake Scene (Tchaikovsky, public domain, Op. 20 Act
+  II No. 10) as a looping three-minute melody, with a volume slider. Plays only
+  while a focus session runs
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -190,10 +191,36 @@ focusing and dies if you bail early.
     opening held note keeps its level (RMS 0.207 early vs 0.207 late, where a
     pluck decays away) and the quietest 20 ms across a note join is 0.176, not
     silence. Pitch and rhythm come from the public-domain engraving's MusicXML
-    (bars 2-16), not the ear, so the data is MIDI numbers plus a beat count and
-    can be re-checked against that score. The melody also needed its own level:
+    (the whole Scene, bars 2-70), not the ear, so the data is MIDI numbers plus a
+    beat count and can be re-checked against that score. The melody also needed
+    its own level:
     sustained and legato it is far denser than a pluck, so it is trimmed to match
     the noises' RMS rather than their peak.
+
+11. **In a piano reduction the top note is not the tune.** The Swan Lake source is
+    a piano reduction - two hands on two staves - and the melody changes hands
+    between passages. Bars 27-33 put the tune in the *left* hand under a
+    right-hand tremolo, so "take the highest note" dutifully plays the
+    accompaniment and drops the melody altogether. The reliable signal is the
+    MusicXML `<voice>` element: the tune sits in one voice per passage, so pick
+    the voice and read the top note *within* it. Two more traps in the same file:
+    a tremolo is often written as long notes (so "the longest note is the melody"
+    picks the wrong hand), and a moving figure writes the tune as a held note plus
+    a lower neighbour, which has to be thinned back to the tune by hand. Bars that
+    are pure texture - the intro, the chordal-tremolo bars - are better left out
+    than faked, which is what the `SKIP` set in the generator does.
+
+12. **A loop seam is usually a stop you did not need.** The melody is scheduled a
+    whole statement at a time and re-armed by a timer just before the end.
+    Re-arming also stopped whatever the previous statement still had scheduled.
+    That was invisible while the notes ended exactly on the seam, but the next
+    statement starts a little *after* the re-arm fires, so the stop left a ~60 ms
+    hole at the loop point. The old notes are already timed to finish on the seam,
+    so the fix is to let them end by themselves. Measured with
+    `OfflineAudioContext.suspend()` - a plain offline render finishes too fast for
+    a `setTimeout` re-arm to ever fire, so the suspend callback has to stand in for
+    it - the quietest 20 ms at the seam went from 0.0000 to 0.0137 against a body
+    level of 0.0944, i.e. the statements now overlap instead of gapping.
 
 ## How features were verified
 

@@ -1223,34 +1223,89 @@
   // Swan Lake is a melody, so unlike the noises above it is not a filtered noise
   // buffer but a list of notes. Tchaikovsky, Op. 20, Act II No. 10 (1876) -
   // public domain, synthesised here rather than shipped as an asset. This is the
-  // complete swan theme everyone means by "Swan Lake": the A phrase and its
-  // answer, then the rising B phrase, repeated. It loops under a focus session.
+  // whole Scene, not just the famous opening: the oboe theme, its development,
+  // the restatement low in the strings under a tremolo, and the coda. Bar 48
+  // speeds up (Piu mosso, quarter = 104), so those bars are scaled into the 84bpm
+  // grid the rest is written in. About three minutes, looped under a focus
+  // session.
   //
-  // [MIDI note, beats], 4/4, sixty beats in all - 45s at 80bpm. Pitches and
-  // durations are read from the public-domain engraving's MusicXML (bars 2-16),
-  // not played by ear, which is why they are MIDI numbers with a beat count
-  // rather than the hand-picked frequencies the alert sounds use. Bar numbers in
-  // the comments match that score, so the data can be checked against it.
+  // [MIDI note, beats], read from the public-domain engraving's MusicXML - not
+  // played by ear - which is why they are MIDI numbers with a beat count rather
+  // than the hand-picked frequencies the alert sounds use. Bar numbers in the
+  // comments match that score, so the data can be checked against it.
+  //
+  // Bars with no tune are left out rather than faked: 1 (intro), 26 and 34-37 are
+  // pure accompaniment texture (a chordal tremolo), so the melody moves straight
+  // on to the next phrase.
   const SWAN = {
-    bpm: 80,
+    bpm: 84,
     trim: 1.1,
     notePeak: 0.5,
     notes: [
-      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],              // bar 2
-      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],                       // bar 3
-      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5], // bar 4
-      [71, 2], [71, 0.5], [76, 0.5], [74, 0.5], [73, 0.5],              // bar 5
-      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],              // bar 6
-      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],                       // bar 7
-      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5], // bar 8
-      [71, 3], [71, 1],                                                 // bar 9
-      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],                  // bar 10
-      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],              // bar 11
-      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5],              // bar 12
-      [85, 1.5], [83, 0.5], [78, 0.5], [74, 0.5], [73, 0.5], [71, 0.5], // bar 13
-      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],                  // bar 14
-      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],              // bar 15
-      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5]               // bar 16
+      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],  // bar 2
+      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],  // bar 3
+      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5],  // bar 4
+      [71, 2], [71, 0.5], [76, 0.5], [74, 0.5], [73, 0.5],  // bar 5
+      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],  // bar 6
+      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],  // bar 7
+      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5],  // bar 8
+      [71, 3], [71, 1],  // bar 9
+      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],  // bar 10
+      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],  // bar 11
+      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5],  // bar 12
+      [85, 1.5], [83, 0.5], [78, 0.5], [74, 0.5], [73, 0.5], [71, 0.5],  // bar 13
+      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],  // bar 14
+      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],  // bar 15
+      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5],  // bar 16
+      [84, 1.5], [79, 0.5], [76, 1], [79, 0.5], [84, 0.5],  // bar 17
+      [85, 1.5], [80, 0.5], [85, 1.5], [78, 0.5],  // bar 18
+      [83, 1], [74, 0.5], [71, 0.5], [76, 1], [67, 1],  // bar 19
+      [78, 4],  // bar 20
+      [78, 2], [79, 1], [82, 1],  // bar 21
+      [83, 4],  // bar 22
+      [83, 4],  // bar 23
+      [83, 4],  // bar 24
+      [83, 2], [79, 1], [82, 1],  // bar 25
+      [61, 1], [62, 1], [64, 1], [66, 0.5], [67, 0.5],  // bar 27
+      [69, 1.5], [67, 0.5], [66, 1], [67, 0.5], [69, 0.5],  // bar 28
+      [71, 1.5], [69, 0.5], [67, 1], [69, 0.5], [71, 0.5],  // bar 29
+      [73, 1.5], [71, 0.5], [70, 0.5], [62, 0.5], [61, 0.5], [59, 0.5],  // bar 30
+      [61, 1.5], [62, 0.5], [64, 1], [66, 0.5], [67, 0.5],  // bar 31
+      [69, 1.5], [67, 0.5], [66, 1], [67, 0.5], [69, 0.5],  // bar 32
+      [71, 1.5], [69, 0.5], [67, 1], [69, 0.5], [71, 0.5],  // bar 33
+      [84, 4],  // bar 38
+      [79, 2], [78, 1.3333], [78, 0.6667],  // bar 39
+      [84, 4],  // bar 40
+      [79, 2], [78, 1.3333], [78, 0.6667],  // bar 41
+      [84, 4],  // bar 42
+      [85, 4],  // bar 43
+      [86, 4],  // bar 44
+      [86, 3], [85, 1],  // bar 45
+      [86, 0.6667], [86, 0.6667], [85, 0.6667], [86, 0.6667], [86, 0.6667], [85, 0.6667],  // bar 46
+      [86, 0.6667], [86, 0.6667], [85, 0.6667], [86, 0.6667], [86, 0.6667], [85, 0.6667],  // bar 47
+      [90, 0.8077], [88, 0.8077], [85, 0.8077], [82, 0.8077],  // bar 48
+      [78, 1], [76, 1], [73, 1], [70, 1],  // bar 49
+      [66, 1], [64, 1], [61, 1], [58, 1],  // bar 50
+      [54, 1], [52, 1], [50, 1], [49, 1],  // bar 51
+      [78, 4],  // bar 52
+      [83, 1], [85, 1], [86, 1], [88, 1],  // bar 53
+      [78, 1.5], [90, 1.5], [86, 1],  // bar 54
+      [78, 1.5], [90, 1.5], [86, 1],  // bar 55
+      [90, 2], [86, 2],  // bar 56
+      [83, 2], [78, 2],  // bar 57
+      [86, 2], [83, 2],  // bar 58
+      [78, 2], [74, 2],  // bar 59
+      [90, 4],  // bar 60
+      [83, 1], [85, 1], [86, 1], [88, 1],  // bar 61
+      [90, 3], [86, 1],  // bar 62
+      [90, 3], [86, 1],  // bar 63
+      [66, 2], [59, 2],  // bar 64
+      [66, 2], [59, 2],  // bar 65
+      [66, 2], [59, 2],  // bar 66
+      [66, 2], [59, 2],  // bar 67
+      [66, 2], [59, 2],  // bar 68
+      [66, 2], [59, 2],  // bar 69
+      [66, 4],  // bar 70
     ]
   };
 
@@ -1454,11 +1509,10 @@
   }
 
   function scheduleSwanStatement(player) {
-    // Every note of the previous statement has finished by now - they are timed
-    // to end on the seam - so this is only a belt-and-braces stop.
-    player.sources.forEach(function (node) {
-      try { node.stop(); } catch (err) { /* already stopped */ }
-    });
+    // The previous statement's notes are all timed to finish on the seam, so they
+    // are left to stop themselves. Stopping them here would clip the last note and
+    // leave a hole at the loop point, because the new statement starts a little
+    // later than the re-arm fires.
     player.sources = [];
 
     const beat = 60 / SWAN.bpm;
