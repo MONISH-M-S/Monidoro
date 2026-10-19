@@ -380,8 +380,8 @@
           <button type="button" data-ambient="rain">Rain</button>
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
-          <button type="button" data-ambient="swan">Swan Lake</button>
-          <button type="button" data-ambient="swanLong">Swan Lake (long)</button>
+          <button type="button" data-ambient="swan">Swan Lake Vintage</button>
+          <button type="button" data-ambient="swanArchive">Swan Lake European</button>
         </div>
         <p class="hint">Plays only while a focus session runs. Picking one previews it.</p>
       </div>
@@ -480,9 +480,9 @@
   const THEME_CHOICES = ["system", "light", "dark"];
   // The noises are all synthesised, so only the Swan Lake recordings need a
   // companion file; everything else still works from a single file offline.
-  // "swan" and "swanLong" are two transfers of the same music, described where
-  // their files are named further down.
-  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan", "swanLong"];
+  // "swan" and "swanArchive" are two transfers of the same music, described
+  // where their files are named further down.
+  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan", "swanArchive"];
 
   // Accents are restricted to a plain six-digit hex colour, so a hand-edited
   // or imported value can never smuggle anything else into the stylesheet.
@@ -775,6 +775,11 @@
       ? source.activeTag
       : "";
 
+    // The archive recording's key was renamed from "swanLong" when the chips
+    // stopped being named by length. A stored or imported old value has to keep
+    // selecting it, or the rename would quietly drop the choice back to "off".
+    const ambient = source.ambient === "swanLong" ? "swanArchive" : source.ambient;
+
     return {
       focusSec: clampInt(
         source.focusSec, LIMITS.focus.min, LIMITS.focus.max, DEFAULTS.focusSec
@@ -803,8 +808,8 @@
         ? source.accent
         : DEFAULTS.accent,
       sound: sound,
-      ambient: AMBIENT_KEYS.indexOf(source.ambient) >= 0
-        ? source.ambient
+      ambient: AMBIENT_KEYS.indexOf(ambient) >= 0
+        ? ambient
         : DEFAULTS.ambient,
       ambientVolume: clampInt(source.ambientVolume, 0, 100, DEFAULTS.ambientVolume),
       name: typeof source.name === "string" ? source.name.slice(0, 24) : DEFAULTS.name,
@@ -1455,18 +1460,18 @@
   // graph above, because routing a media element through a graph taints it when
   // the page is opened from file:// - and a tainted source is silence.
   //
-  // Two transfers are offered, and they differ in length rather than in music:
-  // the HMV one is the Scene on its own, and the European Archive one plays on
-  // into the rest of Act II. Both were levelled to the same loudness when they
-  // were prepared - measured, not guessed - so switching between them does not
-  // call for a different slider position.
+  // Two transfers are offered, told apart by age rather than by music: the
+  // vintage one is the Scene on its own (Barbirolli, 1933), and the European
+  // one (European Archive) plays on into the rest of Act II. Both were levelled
+  // to the same loudness when they were prepared - measured, not guessed - so
+  // switching between them does not call for a different slider position.
   //
   // Tchaikovsky's music is public domain, and so are both transfers (see
   // NOTES.md for the credits). If a file is missing or will not decode, the
   // synthesised melody below takes over, so the choice is never simply silent.
   const SWAN_RECORDINGS = {
     swan: "swan-lake.ogg",
-    swanLong: "swan-lake-archive.ogg"
+    swanArchive: "swan-lake-archive.ogg"
   };
 
   function isSwan(key) {

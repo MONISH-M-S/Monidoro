@@ -50,15 +50,14 @@ and pushed.
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
   filtered, plus two real Swan Lake recordings, both looped: `swan-lake.ogg`
-  (Barbirolli, 1933 — the Scene alone, 2:30) and `swan-lake-archive.ogg`
-  (European Archive — the Scene and on into the rest of Act II, 4:10). They are
-  offered as "Swan Lake" and "Swan Lake (long)" because they differ in length
-  rather than in music. With a file missing, that choice plays the app's own
+  ("Swan Lake Vintage" — Barbirolli, 1933, the Scene alone, 2:30) and
+  `swan-lake-archive.ogg` ("Swan Lake European" — European Archive, the Scene
+  and on into the rest of Act II, 4:10). Both files were levelled to the same
+  loudness on disk, so switching between them does not call for a different
+  slider position. With a file missing, that choice plays the app's own
   transcription of the Scene, taken from the engraving's MusicXML (215 notes,
   182 s, looped), so the choice is never silent. One volume slider drives all of
-  them, and they are levelled to each other on disk so switching between them
-  does not call for a different slider position. Plays only while a focus
-  session runs
+  them. Plays only while a focus session runs
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -187,7 +186,11 @@ focusing and dies if you bail early.
    wipe. `readStored()` reads the new key first and falls back to the old one,
    so nothing is lost and everything migrates forward on the next save. Any
    future rename of a key must repeat this, and the old key must be *read*, not
-   deleted.
+   deleted. The same goes for a rename *inside* a value: when the archive chip
+   was renamed, its key went from `swanLong` to `swanArchive` and
+   `sanitizeSettings()` maps the old name forward, because an unmatched value
+   falls back to the default (`off`) — indistinguishable from the setting
+   erasing itself.
 
 9. **Audio can be measured, so measure it.** Every noise and tone is verified by
    building the real graph on an `OfflineAudioContext`, rendering it, and
@@ -298,7 +301,7 @@ Keep that bar. It has already paid for itself twice.
   [Musopen](https://musopen.org/) under a public domain mark, hosted on
   [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tchaikovsky_-_Swan_Lake_Op.20_-_Act_II_Pt.1.ogg).
   Neither the orchestra nor the recording date is stated anywhere in the release,
-  which is why the app labels it by length rather than by performer. It arrived
+  so the chip names the source rather than inventing a performer. It arrived
   about 10 dB quieter than the HMV transfer at equal peaks and was levelled to it
   before shipping (both now measure -18 LUFS and an RMS of 0.114, against 0.9
   peaks), which took about +10.4 dB of gain with roughly 3 dB of peak limiting —
