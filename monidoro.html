@@ -16,6 +16,14 @@
     --warn:#886308; --cal-accent:#3b7748;
     --plant:#3f7d4e; --plant-dead:#9a8b6a; --bloom:#c76a90;
     --scrim:244, 241, 234;
+    /* The third heat step and the ink it carries. In the light theme the mix
+       runs toward a pale line, so 70% lands light enough for the fixed dark
+       ink. In the dark theme the accent is bright and the line is dark, so 70%
+       lands the step on a mid-tone that cannot carry small text either way
+       (gotcha 28); 80% keeps it bright enough for a black label, which is what
+       the two dark blocks below set. Measured over every accent and tag colour
+       in NOTES.md. */
+    --cal-step3:70%; --cal-ink3:#1c1a15;
     color-scheme:light;
   }
   /* The :not() lets an explicit "light" choice beat a dark OS setting. The
@@ -29,6 +37,7 @@
       --warn:#e0b04a; --cal-accent:#6dbb7f;
       --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
       --scrim:20, 19, 16;
+      --cal-step3:80%; --cal-ink3:#000000;
       color-scheme:dark;
     }
   }
@@ -39,6 +48,7 @@
     --warn:#e0b04a; --cal-accent:#6dbb7f;
     --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
     --scrim:20, 19, 16;
+    --cal-step3:80%; --cal-ink3:#000000;
     color-scheme:dark;
   }
   /* Deliberately NO transition on anything whose value comes from a custom
@@ -499,17 +509,18 @@
   .lvl0{background:var(--line)}
   .lvl1{background:color-mix(in srgb, var(--cal-accent) 22%, var(--line))}
   .lvl2{background:color-mix(in srgb, var(--cal-accent) 40%, var(--line))}
-  .lvl3{background:color-mix(in srgb, var(--cal-accent) 70%, var(--line))}
+  .lvl3{background:color-mix(in srgb, var(--cal-accent) var(--cal-step3), var(--line))}
   .lvl4{background:var(--cal-accent)}
   /* The day number has to be readable on every step, and the step's lightness
      decides which ink does it: --mut on the plain cell, --ink on the two pale
-     ones, and a fixed dark ink on the third, which is a mid-tone in both themes
-     (the theme's --ink is light in the dark theme and would sit at 3.6:1). The
-     fourth step is the accent itself - dark in the light theme, bright in the
-     dark one - so it keeps --bg. All four measured, both themes; the second step
-     is 40% and not 45% because at 45% its ink had only 4.52:1 on it. */
+     ones, and a fixed dark ink on the third (--cal-ink3, above, because in the
+     dark theme it is a bright cell and a light ink would vanish). The fourth
+     step is the accent itself - dark in the light theme, bright in the dark one
+     - so it keeps --bg. All four measured, both themes, over every accent and
+     tag colour; the second step is 40% and not 45% because at 45% its ink had
+     only 4.52:1 on it. */
   .cal-cell.lvl1, .cal-cell.lvl2{color:var(--ink)}
-  .cal-cell.lvl3{color:#1c1a15}
+  .cal-cell.lvl3{color:var(--cal-ink3)}
   .cal-cell.lvl4{color:var(--bg)}
 
   .cal-legend{
@@ -732,12 +743,12 @@
         <span class="field-label">Accent colour</span>
         <div class="btn-row" id="accentRow">
           <button type="button" data-accent="" title="Use the built-in accent">Default</button>
-          <button type="button" class="swatch" data-accent="#4a9d64" aria-label="Green" title="Green" style="--sw:#4a9d64"></button>
-          <button type="button" class="swatch" data-accent="#3f80c4" aria-label="Blue" title="Blue" style="--sw:#3f80c4"></button>
-          <button type="button" class="swatch" data-accent="#8a6fd1" aria-label="Purple" title="Purple" style="--sw:#8a6fd1"></button>
-          <button type="button" class="swatch" data-accent="#d08a3a" aria-label="Amber" title="Amber" style="--sw:#d08a3a"></button>
-          <button type="button" class="swatch" data-accent="#d1629a" aria-label="Pink" title="Pink" style="--sw:#d1629a"></button>
-          <button type="button" class="swatch" data-accent="#3aa39a" aria-label="Teal" title="Teal" style="--sw:#3aa39a"></button>
+          <button type="button" class="swatch" data-accent="#4a9d64" aria-label="Green" title="Green" style="--sw:var(--tone-green)"></button>
+          <button type="button" class="swatch" data-accent="#3f80c4" aria-label="Blue" title="Blue" style="--sw:var(--tone-blue)"></button>
+          <button type="button" class="swatch" data-accent="#8a6fd1" aria-label="Purple" title="Purple" style="--sw:var(--tone-purple)"></button>
+          <button type="button" class="swatch" data-accent="#d08a3a" aria-label="Amber" title="Amber" style="--sw:var(--tone-amber)"></button>
+          <button type="button" class="swatch" data-accent="#d1629a" aria-label="Pink" title="Pink" style="--sw:var(--tone-pink)"></button>
+          <button type="button" class="swatch" data-accent="#3aa39a" aria-label="Teal" title="Teal" style="--sw:var(--tone-teal)"></button>
         </div>
       </div>
 
@@ -998,6 +1009,47 @@
   const TAG_COLORS = [
     "#3f80c4", "#d08a3a", "#8a6fd1", "#3aa39a", "#d1629a", "#a8603c"
   ];
+
+  // A colour is stored as the mid-tone it has always been, because that hex is
+  // the setting's identity and is already in people's storage and backups. But
+  // a mid-tone cannot carry a small label in either theme (gotcha 28), so each
+  // one is painted as the tone at its own end of the range. Keying the pair by
+  // the stored hex means nothing in settings changes and no migration is
+  // needed. The same table resolves a *tag* colour, so a tag and a swatch that
+  // share a hue stay the same colour everywhere.
+  //
+  // Each tone is the stored hex scaled evenly in RGB until it clears the
+  // harshest surface it is painted on. In the light theme that is --bg under the
+  // label, at 5:1. In the dark theme it is the accent used as *text*: the task
+  // row is an 8% tint of the accent, and a tone that merely clears 5:1 against
+  // --bg (luminance 0.233) only reaches 4.2:1 there, so the dark tones sit at
+  // luminance 0.271 - which also puts the fill and the plain card above 5:1.
+  // Green, Amber and Teal already cleared it in the dark theme and keep their
+  // tone. "Clay" (#a8603c) is a tag colour that is not one of the six swatches;
+  // it needs both tones, since it fails in both themes. Measured values are in
+  // NOTES.md.
+  const ACCENT_TONES = [
+    ["#4a9d64", "#367349", "#4b9f65", "green"],
+    ["#3f80c4", "#346aa2", "#4891df", "blue"],
+    ["#8a6fd1", "#705aa9", "#9a7ce9", "purple"],
+    ["#d08a3a", "#8c5d27", "#d08a3a", "amber"],
+    ["#d1629a", "#9f4a75", "#da66a1", "pink"],
+    ["#3aa39a", "#29726c", "#3aa39a", "teal"],
+    ["#a8603c", "#975636", "#d0774a", "clay"]
+  ];
+
+  // The tonal variables live on :root and are filled by applyTheme(), so a hex
+  // handed to a tag or a swatch becomes a reference rather than a literal and
+  // follows a theme change without re-rendering anything. A hex that is not in
+  // the table (only possible through a hand-edited or imported colour) is used
+  // exactly as it was stored, rather than guessed at.
+  const TONE_VARS = {};
+  ACCENT_TONES.forEach(function (row) { TONE_VARS[row[0]] = "var(--tone-" + row[3] + ")"; });
+
+  function toneVar(hex) {
+    return TONE_VARS[String(hex).toLowerCase()] || hex;
+  }
+
   const DEFAULT_TAGS = [
     { id: "study", name: "Study", color: "#3f80c4" },
     { id: "work", name: "Work", color: "#d08a3a" }
@@ -3127,7 +3179,7 @@
     chip.className = "tag-chip";
     chip.dataset[key] = value;
     chip.textContent = label;
-    if (color) chip.style.setProperty("--tag", color);
+    if (color) chip.style.setProperty("--tag", toneVar(color));
     chip.setAttribute("aria-pressed", String(active));
     return chip;
   }
@@ -3194,7 +3246,7 @@
       const color = document.createElement("button");
       color.type = "button";
       color.className = "tag-color";
-      color.style.setProperty("--tag", tag.color);
+      color.style.setProperty("--tag", toneVar(tag.color));
       color.title = "Change colour";
       color.setAttribute("aria-label", "Change the colour of " + tag.name);
       color.addEventListener("click", function () { cycleTagColor(tag.id); });
@@ -3317,8 +3369,26 @@
   // The choice is written to <html> so the CSS can resolve it. "System"
   // removes the attribute entirely, which hands control back to the media
   // query and keeps it following the OS if you change it later.
+  // "System" has no attribute of its own, so which tone is being drawn depends
+  // on the OS. The media query is the same one the stylesheet uses; reading it
+  // here keeps the resolved colours in step with the CSS instead of guessing.
+  const darkQuery = window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
+
+  function isDarkTheme() {
+    if (settings.theme === "dark") return true;
+    if (settings.theme === "light") return false;
+    return Boolean(darkQuery && darkQuery.matches);
+  }
+
+  // The accent is stored as a hex but painted as the tone for the theme being
+  // drawn, because the stored one is a mid-tone and cannot carry --bg as a
+  // label (gotcha 28). Breaks override --accent further down on <body>, so they
+  // keep their own colours.
   function applyTheme() {
     const root = document.documentElement;
+    const dark = isDarkTheme();
 
     if (settings.theme === "light" || settings.theme === "dark") {
       root.setAttribute("data-theme", settings.theme);
@@ -3326,15 +3396,33 @@
       root.removeAttribute("data-theme");
     }
 
-    // The accent lives on :root as an inline custom property. Breaks override
-    // --accent further down on <body>, so they keep their own colours.
+    // One pair per stored hex, filled here rather than hardcoded in three CSS
+    // blocks. Everything that paints with a stored colour - the accent, a tag
+    // chip, a calendar heat step - references these, so a theme change repaints
+    // all of them without rebuilding any DOM (and without taking a caret with
+    // it).
+    ACCENT_TONES.forEach(function (row) {
+      root.style.setProperty("--tone-" + row[3], dark ? row[2] : row[1]);
+    });
+
     if (settings.accent) {
-      root.style.setProperty("--accent", settings.accent);
-      root.style.setProperty("--cal-accent", settings.accent);
+      root.style.setProperty("--accent", toneVar(settings.accent));
+      root.style.setProperty("--cal-accent", toneVar(settings.accent));
     } else {
       root.style.removeProperty("--accent");
       root.style.removeProperty("--cal-accent");
     }
+  }
+
+  // A system theme can change while the page is open. The CSS follows at once;
+  // the tones resolved above have to be told, or the accent and every tag would
+  // keep the tones of the theme that was in effect at load.
+  if (darkQuery) {
+    const followScheme = function () {
+      if (settings.theme === "system") applyTheme();
+    };
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", followScheme);
+    else if (darkQuery.addListener) darkQuery.addListener(followScheme);
   }
 
   function renderThemeChoice() {
@@ -3877,7 +3965,7 @@
     const peak = weeks.reduce(function (best, week) {
       return Math.max(best, week.totals.seconds);
     }, 0);
-    if (tag) el.statsTracks.style.setProperty("--stats-bar", tag.color);
+    if (tag) el.statsTracks.style.setProperty("--stats-bar", toneVar(tag.color));
     else el.statsTracks.style.removeProperty("--stats-bar");
 
     el.statsTracks.innerHTML = "";
@@ -3970,7 +4058,7 @@
 
       const item = document.createElement("div");
       item.className = "tag-stat";
-      item.style.setProperty("--tag", row.color || "var(--mut)");
+      item.style.setProperty("--tag", row.color ? toneVar(row.color) : "var(--mut)");
 
       const head = document.createElement("div");
       head.className = "tag-stat-head";
@@ -4015,7 +4103,7 @@
     // the grid rather than on :root so clearing the filter reverts it by
     // itself, without fighting the accent that applyTheme() sets.
     if (tag) {
-      el.calGrid.style.setProperty("--cal-accent", tag.color);
+      el.calGrid.style.setProperty("--cal-accent", toneVar(tag.color));
     } else {
       el.calGrid.style.removeProperty("--cal-accent");
     }
