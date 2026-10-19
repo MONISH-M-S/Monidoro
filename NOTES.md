@@ -70,7 +70,7 @@ history filed under it. `byTag` is `{tagId: {sessions, seconds}}` and is
 shape they already had. There is no migration pass and reading old history never
 rewrites it.
 
-Three tagging rules worth keeping:
+Four tagging rules worth keeping:
 
 - A session is filed under the tag selected when it **started** (`sessionTag`),
   not when it finished, so switching chips mid-session cannot rewrite where the
@@ -81,6 +81,10 @@ Three tagging rules worth keeping:
 - Removing a tag never touches recorded time and never rewrites history. It only
   drops the breakdown, which is why removal warns only when there is a breakdown
   to lose, and why a tag id is generated internally and never reused.
+- A *stored* tag list that is still exactly the old shipped defaults is treated
+  as "never configured" and follows the new defaults; anything the user has
+  changed is left alone. This is how the default third tag ("Life") was dropped
+  without reaching into anyone's own list — the check is `isOldDefaultTags()`.
 
 Older layouts still readable, never written again:
 

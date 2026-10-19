@@ -500,9 +500,26 @@
   ];
   const DEFAULT_TAGS = [
     { id: "study", name: "Study", color: "#3f80c4" },
+    { id: "work", name: "Work", color: "#d08a3a" }
+  ];
+
+  // A fresh install used to be given a third "Life" tag. A stored list that still
+  // matches those old three exactly was never edited, so it follows the new
+  // defaults; anything the user has changed is left well alone.
+  const OLD_DEFAULT_TAGS = [
+    { id: "study", name: "Study", color: "#3f80c4" },
     { id: "work", name: "Work", color: "#d08a3a" },
     { id: "life", name: "Life", color: "#8a6fd1" }
   ];
+
+  function isOldDefaultTags(raw) {
+    if (!Array.isArray(raw) || raw.length !== OLD_DEFAULT_TAGS.length) return false;
+    return OLD_DEFAULT_TAGS.every(function (tag, i) {
+      const other = raw[i];
+      return other && typeof other === "object" &&
+        other.id === tag.id && other.name === tag.name && other.color === tag.color;
+    });
+  }
 
   const DEFAULTS = {
     focusSec: 25 * 60,
@@ -742,9 +759,10 @@
       : (SOUND_KEYS.indexOf(legacySound) >= 0 ? legacySound : DEFAULTS.sound);
 
     // A missing list means "never configured", so the defaults apply. An empty
-    // list means the user deleted them all and has to stay empty.
+    // list means the user deleted them all and has to stay empty. A list that is
+    // still the old defaults counts as "never configured" too.
     const tags = Array.isArray(source.tags)
-      ? sanitizeTags(source.tags)
+      ? sanitizeTags(isOldDefaultTags(source.tags) ? DEFAULT_TAGS : source.tags)
       : sanitizeTags(DEFAULT_TAGS);
 
     // The selection is only kept if it still points at a tag that exists,
