@@ -7,13 +7,13 @@
 > **The order for new work is the list under "Remaining work"**, and it is kept
 > in the order it was agreed. Done: the contrast pass over the backdrops and the
 > panels (14), the extra focus noises (15), the history statistics (16), the
-> accent-and-tag palette (17) and subtasks in the task list (18).
+> accent-and-tag palette (17), subtasks in the task list (18) and reordering on
+> a touch screen (19).
 >
 > Next, and the owner has asked for **all of it**, one commit at a time and
-> without asking again in between: the three task-list slices still to come, in
-> the order they are written down — reordering on touch, a due date or "today"
-> list, a tag per task. Every feature described below was committed as it was
-> finished.
+> without asking again in between: the two task-list slices still to come, in the
+> order they are written down — a due date or "today" list, and a tag per task.
+> Every feature described below was committed as it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -176,6 +176,14 @@ and pushed.
   a block: a task carries its subtasks and lands only on a group boundary, while
   a subtask reorders among its brothers and cannot be dropped under a different
   parent. Alt and an arrow key move exactly the same blocks
+- Reordering on a touch screen, which has no mouse to drag with and no Alt key:
+  a **Reorder** button in the dialog's footer turns each row into its name, its
+  badge and an ↑ and a ↓, and the arrows move the same blocks the drag does. It
+  is an explicit mode rather than a press-and-hold drag because a list that
+  scrolls cannot tell a held finger from a slow scroll, and guessing wrong is
+  worse than one extra tap. The arrows are 44 px wide, and at the end of their
+  travel they are disabled rather than doing nothing; the mode is not a setting,
+  so closing the dialog puts the list back ready to type in
 - Every text colour measured, in both themes, against the pixels actually
   painted behind it — main screen, drawer, both dialogs and the calendar's five
   heat levels — and everything it failed fixed at the colour, not argued away.
@@ -307,7 +315,8 @@ above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
 files of your own (11), the bundled lofi track (12), the task list (13), the
 contrast pass (14), the extra focus noises (15), the history statistics (16), the
-accent-and-tag palette (17) and subtasks in the task list (18).
+accent-and-tag palette (17), subtasks in the task list (18) and reordering on a
+touch screen (19).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -328,15 +337,19 @@ parent whose estimate can be made of its subtasks, and moves that carry a whole
 block. What it cost in layout — a third 26 px control on a row that was already
 tight — is answered at narrow widths rather than by dropping a control.
 
+Reordering on a touch screen is done too. It is a mode rather than a gesture:
+press-and-hold on a row that also scrolls cannot be told apart from a slow scroll
+until the scroll has already begun, and the workaround (taking `touch-action`
+away from the whole list) stops the list scrolling at all. The footer button,
+the arrows and the disabled-at-the-end behaviour are described in "What exists
+today"; the thing worth knowing is that the arrows move the same blocks the drag
+and the Alt keys move, because one list with three ways to reorder that disagree
+is worse than one way.
+
 What is left, in the order it was agreed, one commit at a time:
 
-- **The task list's next three slices**, in the order they are most likely to be
+- **The task list's next two slices**, in the order they are most likely to be
   wanted:
-  - **Reordering on a touch screen.** Drag and drop is a mouse gesture and Alt
-    and the arrow keys need a keyboard, so on a phone the order is fixed. A
-    press-and-hold drag, or an explicit move mode, is the answer. Subtasks make
-    this the one to do first: the indent button already gives a phone a move
-    between levels, and the order is still the half of it that is missing.
   - **A due date or a "today" list.** The app has no notion of a day's plan yet.
     A task belongs to no day at all right now, which is what keeps the daily
     goal and the streaks about time rather than about chores.
@@ -735,6 +748,19 @@ by accident:
     what the list is. Both were driven with real `DragEvent`s and real key
     events, reading the DOM order and the stored order at every step.
 
+33. **A disabled control cannot take focus, and a list that scrolls cannot tell a
+    long press from a slow scroll.** Both traps live in the touch reordering.
+    (a) Reordering is an explicit mode rather than a press-and-hold drag: by the
+    time a hold timer could fire, the browser has usually decided the gesture was
+    a scroll, and the only way to win that is `touch-action: none` on the rows,
+    which stops the list scrolling at all. An arrow per row costs one tap and
+    never guesses. (b) After a tap moves a row to the end of its travel, that
+    arrow is disabled — and `element.focus()` on a disabled button does nothing,
+    so focus falls to `<body>` and the next tap or keypress has nowhere to land.
+    Hand focus to the arrow that can still be used, on the click path and on the
+    Alt-arrow path both. Assert on `document.activeElement`, not only on the new
+    order.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -809,6 +835,26 @@ the row at a simulated 320 px panel (no horizontal overflow; the name field
 90 px on a task and 76 px on a subtask, against 170 px on a desktop panel) and by
 screenshotting both themes: the indent glyphs, the disabled states and their
 `aria-label`s all read correctly.
+
+Reordering on a touch screen was checked as a mode, not as a screenshot. With
+five rows (a task, two subtasks, two tasks) each arrow was disabled exactly where
+its travel ended — up on the first block and the first subtask, down on the last
+block and the last subtask — and moving the parent took its two subtasks with it,
+twice, to the end of the list, with the stored order matching the DOM at every
+step. A subtask moved once among its brothers and then had nowhere left to go.
+Each tap left focus on the arrow just pressed, or on the other one when the
+pressed arrow had reached the end and become disabled — a real bug the first run
+caught, because focusing a disabled button drops focus to `<body>` silently. The
+same was checked with Alt + ArrowDown from an arrow, which moves the same block
+and hands focus on the same way. Leaving the mode put all six name fields and the
+drag handles back, Escape closed the dialog with the mode off, and reopening
+started in edit mode. The footer was checked in its three states — hidden with one
+task, Reorder alone with two tasks and none finished, and Reorder with Clear
+finished once anything was done — and the move row was measured at a simulated
+320 px panel: 120 px of name, two 44 px arrows, no overflow, and the two footer
+buttons still fitting. Both themes were screenshotted; the name and the badge
+carry the same `--ink` / `--mut` pair as the editing row, which the contrast pass
+had already measured.
 
 The contrast pass was measured, not eyeballed. The painted backdrop is rasterised
 inside the page — the body's own computed `background-*` goes into an SVG

@@ -612,6 +612,28 @@
   /* A subtask is the same row set in from the left; the dot, the name and the
      badge are what differ, so the indent is the whole of the shape. */
   .task[data-depth="1"]{margin-left:18px}
+
+  /* Reordering on a touch screen: the row keeps its name and badge and gives up
+     every other control for two arrows, which are big enough to hit with a
+     thumb. It is a mode rather than a press-and-hold drag because a list that
+     scrolls cannot tell a held finger from a slow scroll, and guessing wrong is
+     worse than an extra tap. */
+  .task-name{
+    flex:1 1 auto; min-width:0; padding:5px 4px; font-size:.8rem;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .task[data-done="true"] .task-name{
+    color:var(--mut); text-decoration:line-through;
+  }
+  .task-up, .task-down{
+    flex:0 0 44px; min-width:0; height:34px; padding:0; line-height:1;
+    display:grid; place-content:center; font-size:.95rem;
+    background:transparent; border-color:transparent;
+  }
+  .task-up:disabled, .task-down:disabled{opacity:.3}
+  .task-up:not(:disabled):hover, .task-down:not(:disabled):hover{
+    color:var(--accent);
+  }
   .task-text{
     flex:1 1 auto; min-width:0; width:0; padding:5px 4px; font:inherit;
     font-size:.8rem; border:0; border-radius:6px;
@@ -975,6 +997,7 @@
     <ul class="task-list" id="taskList"></ul>
 
     <div class="task-actions" id="taskActions" hidden>
+      <button type="button" id="taskMove" aria-pressed="false">Reorder</button>
       <button type="button" id="taskClearDone">Clear finished</button>
     </div>
 
@@ -1677,6 +1700,7 @@
     taskList: document.getElementById("taskList"),
     taskActions: document.getElementById("taskActions"),
     taskClearDone: document.getElementById("taskClearDone"),
+    taskMove: document.getElementById("taskMove"),
     taskHint: document.getElementById("taskHint"),
     taskCurrent: document.getElementById("taskCurrent"),
     taskCurrentText: document.getElementById("taskCurrentText"),
@@ -4232,6 +4256,12 @@
   // the dragover handler needs to know whether a drag is ours.
   let dragTaskId = "";
 
+  // True while the list is showing its arrows instead of its editing controls.
+  // A view of the same list, not a setting: it is not stored and it is dropped
+  // when the dialog closes, because nobody wants to reopen onto a list they
+  // cannot type in.
+  let taskMoveMode = false;
+
   // The one task a finished focus session is counted against, or "" for none.
   // Looked up through the list every time rather than cached, so a deletion can
   // never leave a stale task behind.
@@ -4417,27 +4447,21 @@
   // where there is no parent above it.
   function moveTask(task, dir) {
     const items = tasks.items;
+    if (!canMoveTask(task, dir)) return false;
     const i = items.indexOf(task);
     if (i < 0) return false;
 
     if (task.depth === 1) {
-      const parent = parentOf(task);
-      if (!parent) return false;
-      const p = items.indexOf(parent);
-      const last = p + subtasksOf(parent).length;
       const to = i + dir;
-      if (to <= p || to > last) return false;
       items.splice(i, 1);
       items.splice(to, 0, task);
     } else {
       const blocks = orderedBlocks();
-      let bi = -1;
-      blocks.forEach(function (block, index) { if (block[0] === task) bi = index; });
-      const bj = bi + dir;
-      if (bi < 0 || bj < 0 || bj >= blocks.length) return false;
-      const tmp = blocks[bi];
-      blocks[bi] = blocks[bj];
-      blocks[bj] = tmp;
+      let at = -1;
+      blocks.forEach(function (block, index) { if (block[0] === task) at = index; });
+      const swap = blocks[at];
+      blocks[at] = blocks[at + dir];
+      blocks[at + dir] = swap;
       tasks.items = [].concat.apply([], blocks);
     }
     saveTasks();
@@ -4510,6 +4534,15 @@
     row.dataset.done = String(task.done);
     row.dataset.depth = String(task.depth);
     row.dataset.current = String(tasks.current === task.id);
+
+    // In reorder mode there is nothing to type into and nothing to drag: the
+    // row is its name and its badge with an arrow either side. That is the
+    // whole point of the mode - one gesture, one meaning.
+    if (taskMoveMode) {
+      buildMoveRow(row, task);
+      return row;
+    }
+
     // The row is what you drag, but a field inside it keeps its own behaviour,
     // so selecting text in a name is still selecting text.
     row.draggable = true;
@@ -4637,6 +4670,70 @@
     return row;
   }
 
+  // The reorder-mode row: name, badge, and the two arrows. Nothing else, so a
+  // tap can only mean one of three things.
+  function buildMoveRow(row, task) {
+    const name = document.createElement("span");
+    name.className = "task-name";
+    name.textContent = task.text;
+    row.appendChild(name);
+
+    const count = document.createElement("span");
+    count.className = "task-count";
+    row.appendChild(count);
+    renderTaskCount(row, task);
+
+    [["task-up", "\u2191", -1, "Move this up"],
+     ["task-down", "\u2193", 1, "Move this down"]].forEach(function (spec) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = spec[0];
+      button.textContent = spec[1];
+      button.title = spec[3];
+      button.setAttribute("aria-label", spec[3] + ": " + task.text);
+      button.disabled = !canMoveTask(task, spec[2]);
+      button.addEventListener("click", function () {
+        if (!moveTask(taskById(task.id), spec[2])) return;
+        focusMoveButton(task.id, spec[0]);
+      });
+      row.appendChild(button);
+    });
+  }
+
+  // Focus the arrow just pressed unless it has run out of travel, in which case
+  // the other one is still worth having under the finger: tapping twice is the
+  // whole point of a mode, and a disabled button cannot take focus.
+  function focusMoveButton(id, className) {
+    const row = el.taskList.querySelector('.task[data-id="' + id + '"]');
+    if (!row) return;
+    const other = className === "task-up" ? "task-down" : "task-up";
+    const wanted = row.querySelector("." + className);
+    const fallback = row.querySelector("." + other);
+    const target = wanted && !wanted.disabled ? wanted
+      : (fallback && !fallback.disabled ? fallback : null);
+    if (target) target.focus();
+    else el.taskMove.focus();
+  }
+
+  // Whether moving this row one place in that direction means anything. A task
+  // moves between groups and a subtask among its brothers, which is the same
+  // rule the drag and the arrow keys obey.
+  function canMoveTask(task, dir) {
+    if (!task) return false;
+    if (task.depth === 1) {
+      const parent = parentOf(task);
+      if (!parent) return false;
+      const kids = subtasksOf(parent);
+      const at = kids.indexOf(task);
+      return dir < 0 ? at > 0 : at >= 0 && at < kids.length - 1;
+    }
+    const blocks = orderedBlocks();
+    let at = -1;
+    blocks.forEach(function (block, i) { if (block[0] === task) at = i; });
+    if (at < 0) return false;
+    return dir < 0 ? at > 0 : at < blocks.length - 1;
+  }
+
   // The <li>s a move carries: the row itself, and for a task everything nested
   // under it. A subtask carries only itself.
   function subtreeRowNodes(task) {
@@ -4760,13 +4857,20 @@
     const held = event.target.className;
     if (!moveTask(task, event.key === "ArrowUp" ? -1 : 1)) return;
     event.preventDefault();
-    focusInTask(task.id, held);
+    // In reorder mode the key was pressed on an arrow that may have just run out
+    // of travel, so hand focus to the one that can still be used.
+    if (held === "task-up" || held === "task-down") focusMoveButton(task.id, held);
+    else focusInTask(task.id, held);
   });
 
   function renderTasks() {
     // The pointer is checked here rather than trusted: importing a backup,
     // deleting a task or finishing one can all leave it pointing at nothing.
     if (tasks.current && !taskById(tasks.current)) tasks.current = "";
+
+    // Two rows are the least that can be reordered, so the mode has nothing to
+    // say below that and must not be left on when a deletion crosses the line.
+    if (taskMoveMode && tasks.items.length < 2) taskMoveMode = false;
 
     el.taskList.textContent = "";
     tasks.items.forEach(function (task) {
@@ -4776,14 +4880,22 @@
     const finished = tasks.items.filter(function (task) {
       return task.done;
     }).length;
-    el.taskActions.hidden = finished === 0;
+    const reorderable = tasks.items.length > 1;
+    el.taskActions.hidden = !reorderable && finished === 0;
+    el.taskMove.hidden = !reorderable;
+    el.taskMove.textContent = taskMoveMode ? "Done reordering" : "Reorder";
+    el.taskMove.setAttribute("aria-pressed", String(taskMoveMode));
+    el.taskClearDone.hidden = finished === 0;
 
-    el.taskHint.textContent = tasks.items.length
-      ? "The \u21e5 button, or Alt and the arrow keys, indents a task under the " +
-        "one above it. A finished focus session counts against the task you are " +
-        "working on, and a task counts its subtasks too."
-      : "No tasks yet. Add one above - it becomes the task you are working on, " +
-        "and every focus session you finish is counted against it.";
+    el.taskHint.textContent = !tasks.items.length
+      ? "No tasks yet. Add one above - it becomes the task you are working on, " +
+        "and every focus session you finish is counted against it."
+      : taskMoveMode
+        ? "Tap the arrows to move a task. A task takes its subtasks with it, and " +
+          "a subtask stays with its parent."
+        : "The \u21e5 button, or Alt and the arrow keys, indents a task under the " +
+          "one above it. A finished focus session counts against the task you are " +
+          "working on, and a task counts its subtasks too.";
 
     renderCurrentTask();
   }
@@ -4826,8 +4938,22 @@
   }
 
   function closeTasks() {
+    // The arrows are a way of looking at the list, not a setting, so the next
+    // open starts ready to type again.
+    if (taskMoveMode) {
+      taskMoveMode = false;
+      renderTasks();
+    }
     el.tasksModal.hidden = true;
     el.tasksOpen.focus();
+  }
+
+  // The two views of the same list. Reordering is its own mode rather than a
+  // gesture hidden in the rows: a phone has no Alt key, and a long press on a
+  // list that also scrolls cannot be told from a slow scroll.
+  function setTaskMoveMode(on) {
+    taskMoveMode = on;
+    renderTasks();
   }
 
   function addTaskFromInput() {
@@ -4870,6 +4996,9 @@
   el.taskCurrent.addEventListener("click", openTasks);
   el.tasksClose.addEventListener("click", closeTasks);
   el.taskAddBtn.addEventListener("click", addTaskFromInput);
+  el.taskMove.addEventListener("click", function () {
+    setTaskMoveMode(!taskMoveMode);
+  });
   el.taskClearDone.addEventListener("click", clearDoneTasks);
 
   el.tasksModal.addEventListener("click", function (event) {
