@@ -5,10 +5,13 @@
 > you are fully caught up. Nothing is lost.
 >
 > **The order for new work is the list under "Remaining work"**, and it is kept
-> in the order it was agreed: a contrast pass over the backdrops, then more focus
-> noises, then deeper history statistics, then the next slice of the task list.
-> Nothing there is started — the tree is clean, and every feature described below
-> was committed and pushed as it was finished.
+> in the order it was agreed: the contrast pass over the backdrops and the
+> panels is done (14), and the one thing it turned up but could not fix — the
+> accent swatches and the tag colours, which are mid-tones — is written up there
+> with its measurements. After that: more focus noises, then deeper history
+> statistics, then the next slice of the task list. Nothing there is started —
+> the tree is clean, and every feature described below was committed and pushed
+> as it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -72,8 +75,10 @@ and pushed.
   screen, and the tiled dot pattern read as graph paper rather than as a sky.
   Space replaced Stars and a stored `"stars"` maps forward to it.
   A picked image is shrunk to fit, kept in this browser only, and sits under a
-  scrim whose strength is adjustable, so the timer stays readable over any
-  picture. Pure CSS and canvas means no files and nothing downloaded
+  scrim whose strength is adjustable — but a scrim cannot promise contrast
+  against a picture that happens to hold a patch the same tone as the words, so
+  over a photo the text also carries a halo of the theme's own background (see
+  14). Pure CSS and canvas means no files and nothing downloaded
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus sound: rain / brown / cafe, synthesised from two noise buffers and
@@ -137,6 +142,22 @@ and pushed.
   which says how many it is about to take. Alt + arrows aside, every control is
   a button with a label, and the list is capped so a runaway import cannot fill
   the store
+- Every text colour measured, in both themes, against the pixels actually
+  painted behind it — main screen, drawer, both dialogs and the calendar's five
+  heat levels — and everything it failed fixed at the colour, not argued away.
+  The worst case in any preset is now 4.68:1 (dark dunes, the title) and 4.75:1
+  in the light theme, where the floor is the Start button's own accent colour.
+  What it changed: `--mut` is darker in the light theme and lighter in the dark
+  one, `--warn` is darker in the light theme, the notice carries its warning on
+  a tint of its own instead of in its words (2.5:1 over the backdrop before,
+  12.5:1 after), the "test mode" badge uses the theme's own ink pair instead of
+  white on gold (2:1 in the dark theme), each calendar heat step names the ink it
+  can actually carry, and the current task's row is tinted 8% rather than 14%
+  because its own accent and delete glyphs read 4.37:1 against the stronger tint.
+  Over a photo, where no scrim can promise anything, each line carries a halo of
+  the theme background instead: measured 5.11:1 or better for every line that
+  has no background of its own, at every dimming step, over a pure white photo
+  and a pure black one. The reference numbers are in the verification section
 
 ## Storage keys (localStorage)
 
@@ -234,7 +255,8 @@ Two rules that must not be broken:
 Nothing here is half-finished. Everything asked for so far is in and described
 above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
-files of your own (11), the bundled lofi track (12) and the task list (13).
+files of your own (11), the bundled lofi track (12), the task list (13) and the
+contrast pass (14).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -243,11 +265,22 @@ ever prompt.
 
 What is worth doing next, in the order it was raised:
 
-- **A contrast pass over the backdrops.** The text has to stay readable over five
-  gradients and over any photo the user brings, and "looks fine in dark mode on
-  aurora" is not a measurement. The task dialog belongs in it too: it has more
-  small controls than anything else in the app, and its hint is the only text
-  sitting at the same size as the mutest colour.
+- **The accent swatches and the tag colours are mid-tones, and a mid-tone cannot
+  carry small text.** Found by the contrast pass and measured rather than
+  guessed. The six accent chips (`#4a9d64`, `#3f80c4`, `#8a6fd1`, `#d08a3a`,
+  `#d1629a`, `#3aa39a`) are painted behind a `--bg` label on the Start button,
+  and in the light theme that reads 3.28:1, 3.65:1, 3.53:1, 2.52:1, 3.13:1 and
+  2.71:1 respectively — #d08a3a, "Amber", is the worst, and it is also a tag
+  colour, so the pressed tag chips and the fourth calendar heat step inherit the
+  same failure. In the dark theme they mostly pass (5.2:1 to 6.5:1) because
+  `--bg` is near-black there, and that shape is the fix: each swatch needs a
+  light-theme tone and a dark-theme tone, the way the default accent already has
+  one (`#3b7748` / `#6dbb7f`), or the label has to be chosen by measuring the
+  colour it sits on. Both are the same idea — keep each accent out of the middle
+  of the luminance range in the theme it is used in — and both are more than a
+  colour tweak, which is why the pass left this alone and wrote it down instead.
+  The calendar's third step has the same fault for those accents (4.01:1 with
+  Amber in the dark theme) and will be fixed by the same change.
 - **More focus noises** — waves, wind, fire — synthesised in the page like rain
   and cafe, so nothing new has to be downloaded or licensed.
 - **Deeper history statistics**: weekly bars, averages and per-tag trends on top
@@ -564,6 +597,45 @@ by accident:
     different states, which is why a name cleared to nothing springs back on blur
     rather than becoming a row nobody can read.
 
+27. **A form control does not inherit `text-shadow`.** Measured, not assumed: put
+    a shadow on a container and a `span` inside it shows it while a `button`
+    inside the same container reports `none`. The photo halo therefore names
+    every line it needs — `.tags .tag-chip`, `.skip`, `.panel-buttons button`
+    and `.task-current` are all buttons and all listed themselves — instead of
+    setting the shadow on `main` and trusting it to reach the children. An
+    element with a background of its own is left out, because a glow the colour
+    of its own label only blurs the label.
+
+28. **A mid-tone background cannot carry small text at 4.5:1, in either
+    direction.** This is a rule about colours, not about a page. A surface whose
+    luminance sits near 0.18 is the worst case for dark and light labels at once:
+    it is the point where their two ratios cross, at 4.6:1 even for a perfectly
+    black or perfectly white label — and a theme's ink and background are never
+    pure, so with the real pair the same surface lands near 3.8–4.1:1 whichever
+    one you pick. It is why the calendar's third heat step takes a fixed dark ink
+    (`#1c1a15`) while its second takes the theme's `--ink`, why the "test mode"
+    badge gave up `--warn` and took the theme's own ink pair, and why the accent
+    swatches are the one thing the contrast pass could not fix — they *are*
+    mid-tones, and the fix is to give each one a tone at the light end and a tone
+    at the dark end. Reach for a plate, a tint or a halo; do not reach for a
+    cleverer label colour.
+
+29. **Measure the painted pixel, and make sure your parser can read it.** The
+    contrast pass rasterises the body's own backdrop inside the page (an SVG
+    `foreignObject` holding the computed `background-*`, drawn to a canvas and
+    read back with `getImageData`) and samples a grid inside each text box, which
+    is far better than eyeballing a gradient. Two traps in that harness are worth
+    repeating. (a) Rasterise the **whole body box**, not the window: with a
+    viewport-sized raster everything below the fold is skipped silently, which is
+    how the stats line and the notice went unmeasured at first. (b) Chrome
+    serialises `color-mix()` as `color(srgb 0.23 0.46 0.28)` — a colour space
+    *word* followed by three numbers — so a parser that takes the first number as
+    red produces `NaN`. And because every comparison against `NaN` is false, a
+    `NaN` element is never counted as a failure: it looks like a pass. That is
+    exactly how the tinted task row and the calendar's mixed steps stayed
+    invisible until the parser was fixed. Assert on the finding, not on the
+    absence of a finding.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -610,6 +682,49 @@ fed a file with a duplicate id, an uppercase id, a blank name, a 300-character
 name and `used: -4` — all five handled exactly as the sanitizer promises. A
 backup with no `tasks` key at all was imported last, to prove the list survives
 it.
+
+The contrast pass was measured, not eyeballed. The painted backdrop is rasterised
+inside the page — the body's own computed `background-*` goes into an SVG
+`foreignObject`, which is drawn to a canvas and read back with `getImageData`, so
+the numbers come from real pixels (the harness was checked against a
+black-to-white gradient, which reads exactly `rgb(128,128,128)` at its centre) —
+then every element carrying text of its own is sampled on a grid inside its box,
+with the element's translucent background and its ancestors' composited over the
+pixel actually painted there, keeping the worst point and requiring 4.5:1 (3:1
+for large text). Between 16 and 26 lines are found in each state. Worst case per
+area, after the fixes:
+
+| Area | Light | Dark |
+|---|---|---|
+| Plain backdrop | 4.75:1 | 8.02:1 |
+| Dunes | 4.75:1 | 4.68:1 |
+| Aurora | 4.75:1 | 5.54:1 |
+| Grid | 4.75:1 | 5.52:1 |
+| Space | 4.75:1 | 6.23:1 |
+| Customize drawer | 4.75:1 | 7.69:1 |
+| Tasks dialog | 4.74:1 | 6.44:1 |
+| History dialog | 4.75:1 | 4.82:1 |
+| Calendar, five heat steps | 4.75–9.19:1 | 4.82–8.02:1 |
+| Photo, white and black, dimming 0/55/85 | 4.75:1, halo 5.11:1+ | 8.02:1, halo 6.4:1+ |
+
+Every light row bottoms out at the same pair: the Start button's label on its own
+accent, which is the tightest in the app and is what fixed the light theme's
+accent colour. Before the pass the same measurements read: the test-mode badge
+2.00:1 (dark) and 3.25:1 (light), the notice 2.53:1 (light aurora), the title
+3.88:1 (dark dunes), the mode label 3.76:1 (light grid), the Start button 4.38:1,
+the calendar's plain cells 3.76:1 in the light theme — and its mixed steps were
+NaN, i.e. silently counted as passes, until the parser was fixed (gotcha 29). The
+photo case could not be argued into a promise, so it was measured too: over a
+flat photo the scrim alone brings the *primary* text to 4.5:1 at 55% dimming in
+the light theme and 65% in the dark one, and it never brings the muted text there
+at any visible dimming — 4.39:1 at 85% in the dark theme is as good as it gets —
+because any photo can hold a patch the same tone as the words. Hence the halo,
+and hence its own measurement: the strongest shadow layer is the theme background
+at 90%, so the surface a letter carries is `0.9 x scrim + 0.1 x behind`, and
+against that every line without a background of its own reads 5.11:1 or better at
+every dimming step, over a pure white photo and a pure black one, in both themes.
+The six accent swatches and the tag colours were measured too and are the one
+thing left broken — see the measurements in "Remaining work".
 
 Keep that bar. It has already paid for itself twice.
 

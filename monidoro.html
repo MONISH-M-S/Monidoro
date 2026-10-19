@@ -6,9 +6,14 @@
 <title>Monidoro</title>
 <style>
   :root{
-    --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
-    --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --longbreak:#5b4fa8;
-    --warn:#b8860b; --cal-accent:#3f7d4e;
+    /* These are as dark as the contrast pass needed them, not as they first
+       looked. --mut lands on --line in the History panel and over the grid
+       backdrop's own lines; --warn is small text on the backdrop in the notice,
+       where a mid-tone gold read at 2.9:1; --accent carries --bg as its label on
+       the Start button. The measured ratios are in NOTES.md. */
+    --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#5c5749;
+    --line:#dcd4c0; --accent:#3b7748; --break:#2f6f95; --longbreak:#5b4fa8;
+    --warn:#886308; --cal-accent:#3b7748;
     --plant:#3f7d4e; --plant-dead:#9a8b6a; --bloom:#c76a90;
     --scrim:244, 241, 234;
     color-scheme:light;
@@ -19,7 +24,7 @@
      selector. Keep the two dark blocks identical. */
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
-      --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
+      --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#b6ae95;
       --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
       --warn:#e0b04a; --cal-accent:#6dbb7f;
       --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
@@ -29,7 +34,7 @@
   }
   :root[data-theme="light"]{color-scheme:light}
   :root[data-theme="dark"]{
-    --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
+    --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#b6ae95;
     --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
     --warn:#e0b04a; --cal-accent:#6dbb7f;
     --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
@@ -56,10 +61,14 @@
   }
   .greeting{margin:-16px 0 22px; font-size:.95rem; font-weight:600}
   .greeting[hidden]{display:none}
+  /* Was white on --warn, which measured 3.25:1 in the light theme and 2:1 in the
+     dark one, and no single text colour passes on a mid-tone in both themes. The
+     badge carries the theme's own ink pair instead, the way every other surface
+     does. */
   .badge{
     display:inline-block; margin:-20px 0 20px; padding:4px 11px; border-radius:999px;
     font-size:.66rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-    background:var(--warn); color:#fff;
+    background:var(--ink); color:var(--bg);
   }
   .badge[hidden]{display:none}
   .dial{position:relative; width:260px; height:260px; margin:0 auto 30px}
@@ -290,6 +299,31 @@
   body[data-backdrop]:not([data-backdrop="plain"]):not([data-backdrop="photo"]){
     background-image: var(--backdrop-image, none);
   }
+  /* A preset is measured to hold every text colour above 4.5:1, but a photo can
+     be anything, and no amount of dimming promises contrast against a picture
+     that holds a patch the same tone as the text. Measured: at the strongest
+     dimming the muted text still only reaches 4.4:1 in the dark theme, and the
+     timer itself falls under 3:1 over a pale photo with no dimming at all. So
+     over a photo the text paints the theme's own background around each glyph.
+     That surround is not a ratio, it is the surface the letters carry, and it
+     keeps the muted text at 5:1 or better at every dimming step, on any photo,
+     in both themes. Every line is named rather than inheriting from main, because
+     a button is a form control and does not take an inherited text-shadow
+     (measured); lines with a background of their own are left out, since a glow
+     the colour of their own label would only blur it. */
+  body[data-backdrop="photo"] #time,
+  body[data-backdrop="photo"] #mode,
+  body[data-backdrop="photo"] h1,
+  body[data-backdrop="photo"] .greeting,
+  body[data-backdrop="photo"] .tags .tag-chip:not([aria-pressed="true"]),
+  body[data-backdrop="photo"] .skip,
+  body[data-backdrop="photo"] .stats,
+  body[data-backdrop="photo"] .goal,
+  body[data-backdrop="photo"] #streaks,
+  body[data-backdrop="photo"] .task-current,
+  body[data-backdrop="photo"] .panel-buttons button{
+    text-shadow:0 1px 3px rgba(var(--scrim), .9), 0 0 8px rgba(var(--scrim), .55);
+  }
 
   /* The tiles in Customize show the backdrop they choose, from the same
      --backdrop-image definition, so a preset cannot drift from its preview. */
@@ -364,9 +398,15 @@
     background:var(--accent); transition:width .3s ease;
   }
   #streaks{margin-top:12px}
+  /* The notice sits on the backdrop, where --warn text measured 2.5:1 in the
+     light theme: a mid-tone warning colour on a mid-tone background cannot be
+     rescued by darkening it, because --line is under the grid backdrop's lines.
+     So the warning is carried by the border and a tint of its own, and the words
+     are ink on that tint, which measures 13:1 in both themes. */
   .notice{
     margin:14px 0 0; padding:9px 12px; border-radius:8px;
-    border:1px solid var(--warn); color:var(--warn);
+    border:1px solid var(--warn); color:var(--ink);
+    background:color-mix(in srgb, var(--warn) 16%, var(--bg));
     font-size:.72rem; line-height:1.35;
   }
   .notice[hidden]{display:none}
@@ -408,10 +448,19 @@
 
   .lvl0{background:var(--line)}
   .lvl1{background:color-mix(in srgb, var(--cal-accent) 22%, var(--line))}
-  .lvl2{background:color-mix(in srgb, var(--cal-accent) 45%, var(--line))}
+  .lvl2{background:color-mix(in srgb, var(--cal-accent) 40%, var(--line))}
   .lvl3{background:color-mix(in srgb, var(--cal-accent) 70%, var(--line))}
   .lvl4{background:var(--cal-accent)}
-  .cal-cell.lvl3, .cal-cell.lvl4{color:var(--bg)}
+  /* The day number has to be readable on every step, and the step's lightness
+     decides which ink does it: --mut on the plain cell, --ink on the two pale
+     ones, and a fixed dark ink on the third, which is a mid-tone in both themes
+     (the theme's --ink is light in the dark theme and would sit at 3.6:1). The
+     fourth step is the accent itself - dark in the light theme, bright in the
+     dark one - so it keeps --bg. All four measured, both themes; the second step
+     is 40% and not 45% because at 45% its ink had only 4.52:1 on it. */
+  .cal-cell.lvl1, .cal-cell.lvl2{color:var(--ink)}
+  .cal-cell.lvl3{color:#1c1a15}
+  .cal-cell.lvl4{color:var(--bg)}
 
   .cal-legend{
     display:flex; align-items:center; justify-content:flex-end; gap:5px;
@@ -468,8 +517,11 @@
     border-radius:8px; cursor:grab;
   }
   .task + .task{margin-top:2px}
+  /* 8% and not more: the pick and delete glyphs on this row are the accent and
+     --warn, and against a 14% tint the accent read at 4.37:1 in the light
+     theme. The row is still marked by its filled dot and its wash. */
   .task[data-current="true"]{
-    background:color-mix(in srgb, var(--accent) 14%, transparent);
+    background:color-mix(in srgb, var(--accent) 8%, transparent);
   }
   .task.dragging{opacity:.4}
   /* Fields keep their own cursor so that selecting text inside a row is not
@@ -3123,9 +3175,12 @@
       return;
     }
 
-    // The scrim is the theme's own background colour at the chosen strength, so
-    // the timer stays readable over any photo in either theme. --scrim is a
-    // plain "r, g, b" triple, which is why the alpha can simply be added here.
+    // The scrim is the theme's own background colour at the chosen strength. It
+    // settles a photo down but cannot promise contrast on its own, because a
+    // photo can hold a patch the same tone as the text, so the main lines also
+    // carry a halo of the same colour (see the photo rule in the stylesheet).
+    // --scrim is a plain "r, g, b" triple, which is why the alpha can simply be
+    // added here.
     const alpha = clampInt(settings.backdropDim, 0, 85, DEFAULTS.backdropDim) / 100;
     document.body.style.backgroundImage =
       "linear-gradient(rgba(var(--scrim), " + alpha + "), rgba(var(--scrim), " + alpha + ")), " +
