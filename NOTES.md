@@ -246,7 +246,12 @@ by accident:
 
 3. **Cache-bust when testing through the local server.** Chrome will happily
    serve a stale copy: append `?cb=<anything>` to the URL. A test that appears
-   to fail for no reason is often a cached file.
+   to fail for no reason is often a cached file. It applies to the companion
+   audio files too, and there it is worse than confusing: a `focus-music-1.ogg`
+   that had already been deleted kept being *found* and reported as "Found 1
+   track", because the successful probe was served from the cache. `file://`
+   re-reads the disk and has no such problem, which is one more reason the
+   server is only ever the testing harness.
 
 4. **Validate everything, twice.** `sanitizeSettings()` and `sanitizeDays()` are
    used for *both* localStorage *and* imported backup files, because a file the
