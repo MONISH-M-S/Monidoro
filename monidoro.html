@@ -424,6 +424,102 @@
   }
   .cal-tags[hidden]{display:none}
   .cal-tags .tag-chip{padding:4px 9px; font-size:.66rem}
+
+  /* ---------- tasks ---------- */
+
+  /* What you are working on, on the timer's own screen: quiet enough to ignore,
+     close enough to see without opening anything. Dashed like the skip button,
+     because it is a shortcut to somewhere else rather than a control. */
+  .task-current{
+    display:flex; align-items:center; gap:8px; width:100%; margin:10px 0 0;
+    padding:9px 12px; font-size:.76rem; text-align:left; border-style:dashed;
+    background:transparent;
+  }
+  .task-current[hidden]{display:none}
+  .task-current-label{
+    flex:0 0 auto; font-size:.6rem; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--mut);
+  }
+  .task-current-text{
+    flex:1 1 auto; min-width:0; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;
+  }
+  .task-current-count{
+    flex:0 0 auto; color:var(--mut); font-variant-numeric:tabular-nums;
+  }
+
+  #tasksModal .modal-panel{max-width:404px}
+  .task-add{display:flex; gap:6px; margin-top:16px}
+  .task-add input{
+    flex:1 1 auto; min-width:0; width:0; padding:8px 10px; font:inherit;
+    font-size:.8rem; border-radius:8px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  }
+  .task-add button{flex:0 0 auto; padding:8px 12px; font-size:.76rem}
+
+  /* Past a certain length the list scrolls instead of the modal growing past
+     the window - a long list must not push its own buttons off the screen. */
+  .task-list{
+    list-style:none; margin:12px 0 0; padding:0; max-height:46vh; overflow-y:auto;
+  }
+  .task-list:empty{display:none}
+  .task{
+    display:flex; align-items:center; gap:6px; padding:2px 4px;
+    border-radius:8px; cursor:grab;
+  }
+  .task + .task{margin-top:2px}
+  .task[data-current="true"]{
+    background:color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .task.dragging{opacity:.4}
+  /* Fields keep their own cursor so that selecting text inside a row is not
+     mistaken for picking the row up. */
+  .task input{cursor:text}
+
+  /* Every control is a fixed square so the rows line up down the column; the
+     name is the only thing that stretches. */
+  .task-pick, .task-done, .task-del{
+    flex:0 0 26px; min-width:0; height:26px; padding:0; line-height:1;
+    display:grid; place-content:center; font-size:.78rem;
+    background:transparent; border-color:transparent;
+  }
+  .task-pick{color:var(--mut)}
+  .task-pick[aria-pressed="true"]{color:var(--accent)}
+  .task-done{
+    color:transparent; border-style:solid; border-color:var(--line);
+    border-radius:6px; font-size:.72rem;
+  }
+  .task-done[aria-checked="true"]{color:var(--accent); border-color:var(--accent)}
+  .task-del{color:var(--warn); font-size:.95rem}
+  .task-text{
+    flex:1 1 auto; min-width:0; width:0; padding:5px 4px; font:inherit;
+    font-size:.8rem; border:0; border-radius:6px;
+    background:transparent; color:var(--ink);
+  }
+  .task[data-done="true"] .task-text{
+    color:var(--mut); text-decoration:line-through;
+  }
+  /* The spinner arrows take most of a 46px box, so the field is a plain number
+     you can type into instead. */
+  .task-est{
+    flex:0 0 46px; min-width:0; padding:5px 4px; font:inherit; font-size:.74rem;
+    text-align:center; border-radius:6px; -moz-appearance:textfield;
+    border:1px solid transparent; background:transparent; color:var(--mut);
+    font-variant-numeric:tabular-nums;
+  }
+  .task-est::-webkit-outer-spin-button,
+  .task-est::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+  .task-est:hover, .task-est:focus-visible{
+    border-color:var(--line); background:var(--bg);
+  }
+  .task-count{
+    flex:0 0 auto; font-size:.72rem; color:var(--mut);
+    font-variant-numeric:tabular-nums;
+  }
+  .task-count[data-met="true"]{color:var(--accent)}
+
+  .task-actions{display:flex; gap:6px; margin-top:12px}
+  .task-actions[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -467,8 +563,15 @@
   <div class="tags" id="tagRow" role="group" aria-label="Tag for the next session" hidden></div>
   <button type="button" class="skip" id="skip" hidden>Skip break</button>
 
+  <button type="button" class="task-current" id="taskCurrent" aria-haspopup="dialog" hidden>
+    <span class="task-current-label">Working on</span>
+    <span class="task-current-text" id="taskCurrentText"></span>
+    <span class="task-current-count" id="taskCurrentCount"></span>
+  </button>
+
   <section class="panels">
     <div class="panel-buttons">
+      <button type="button" id="tasksOpen" aria-haspopup="dialog">Tasks</button>
       <button type="button" id="settingsOpen" aria-haspopup="dialog">Customize</button>
       <button type="button" id="calendarOpen">History</button>
     </div>
@@ -702,6 +805,29 @@
     </div>
 
     <p class="hint" id="calSummary"></p>
+  </div>
+</div>
+
+<div class="modal" id="tasksModal" hidden>
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="tasksTitle">
+    <button type="button" class="nav-btn cal-close" id="tasksClose" aria-label="Close tasks">&#10005;</button>
+
+    <div class="modal-head"><h2 id="tasksTitle">Tasks</h2></div>
+
+    <div class="task-add">
+      <input type="text" id="taskInput" maxlength="200" autocomplete="off"
+             placeholder="Add a task, press Enter" aria-label="New task">
+      <button type="button" id="taskAddBtn">Add</button>
+    </div>
+
+    <ul class="task-list" id="taskList"></ul>
+
+    <div class="task-actions" id="taskActions" hidden>
+      <button type="button" id="taskClearDone">Clear finished</button>
+    </div>
+
+    <p class="hint" id="taskHint"></p>
   </div>
 </div>
 
@@ -940,6 +1066,7 @@
   const STORE_SETTINGS = "monidoro.settings";
   const STORE_COMPLETED = "monidoro.completed";
   const STORE_DAYS = "monidoro.days";
+  const STORE_TASKS = "monidoro.tasks";
 
   // Two older key layouts are still readable, so renaming the app did not throw
   // anyone's history away:
@@ -1176,6 +1303,63 @@
     }
   }
 
+  /* Tasks live in a store of their own: a list of things to do, each carrying
+     how many finished focus sessions went into it and, optionally, how many
+     were expected. The "current" task - the one a running session is counted
+     against - lives in the same record, so a pointer can never arrive without
+     the list it points into. */
+  const TASK_ID_PATTERN = /^[a-z0-9]{1,12}$/;
+  const TASK_MAX = 200;
+  const TASK_TEXT_MAX = 200;
+  const TASK_EST_MAX = 99;
+  const TASK_USED_MAX = 9999;
+
+  // Never trust stored JSON: an entry that cannot be read is dropped rather than
+  // guessed at, and the pointer is kept only when it lands on a task that is
+  // really there.
+  function sanitizeTasks(raw) {
+    const clean = { current: "", items: [] };
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return clean;
+
+    const taken = {};
+    const items = Array.isArray(raw.items) ? raw.items : [];
+    items.slice(0, TASK_MAX).forEach(function (item) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return;
+      if (typeof item.id !== "string" || !TASK_ID_PATTERN.test(item.id)) return;
+      // Two rows with one id would mean one of them is unreachable and
+      // undeletable, because every lookup is by id.
+      if (taken[item.id]) return;
+
+      const text = typeof item.text === "string"
+        ? item.text.trim().slice(0, TASK_TEXT_MAX)
+        : "";
+      if (!text) return;
+
+      taken[item.id] = true;
+      clean.items.push({
+        id: item.id,
+        text: text,
+        done: item.done === true,
+        est: clampInt(item.est, 0, TASK_EST_MAX, 0),
+        used: clampInt(item.used, 0, TASK_USED_MAX, 0)
+      });
+    });
+
+    const current = typeof raw.current === "string" ? raw.current : "";
+    if (taken[current]) clean.current = current;
+    return clean;
+  }
+
+  function loadTasks() {
+    const stored = readStored(STORE_TASKS);
+    if (!stored) return { current: "", items: [] };
+    try {
+      return sanitizeTasks(JSON.parse(stored));
+    } catch (err) {
+      return { current: "", items: [] };
+    }
+  }
+
   /* ---------- state ---------- */
 
   const settings = loadSettings();
@@ -1196,6 +1380,7 @@
   let autoId = null;
   let completed = loadCount();
   let days = loadDays();
+  let tasks = loadTasks();
   let audioCtx = null;
   let selectedSound = settings.sound;
   let cycleCount = 0;
@@ -1268,7 +1453,19 @@
     calTitle: document.getElementById("calTitle"),
     calGrid: document.getElementById("calGrid"),
     calTagRow: document.getElementById("calTagRow"),
-    calSummary: document.getElementById("calSummary")
+    calSummary: document.getElementById("calSummary"),
+    tasksOpen: document.getElementById("tasksOpen"),
+    tasksModal: document.getElementById("tasksModal"),
+    tasksClose: document.getElementById("tasksClose"),
+    taskInput: document.getElementById("taskInput"),
+    taskAddBtn: document.getElementById("taskAddBtn"),
+    taskList: document.getElementById("taskList"),
+    taskActions: document.getElementById("taskActions"),
+    taskClearDone: document.getElementById("taskClearDone"),
+    taskHint: document.getElementById("taskHint"),
+    taskCurrent: document.getElementById("taskCurrent"),
+    taskCurrentText: document.getElementById("taskCurrentText"),
+    taskCurrentCount: document.getElementById("taskCurrentCount")
   };
 
   el.ring.style.strokeDasharray = RING_LENGTH;
@@ -2403,6 +2600,7 @@
       completed += 1;
       store.set(STORE_COMPLETED, String(completed));
       recordFocusSession(settings.focusSec);
+      countTaskSession();
       renderStats();
       celebrate();
 
@@ -3391,11 +3589,412 @@
     if (event.target.dataset.close) closeCalendar();
   });
 
+  /* ---------- tasks ---------- */
+
+  // True while a row is being dragged. Kept here rather than in the DOM because
+  // the dragover handler needs to know whether a drag is ours.
+  let dragTaskId = "";
+
+  // The one task a finished focus session is counted against, or "" for none.
+  // Looked up through the list every time rather than cached, so a deletion can
+  // never leave a stale task behind.
+  function taskById(id) {
+    if (!id) return null;
+    let found = null;
+    tasks.items.forEach(function (task) { if (task.id === id) found = task; });
+    return found;
+  }
+
+  function saveTasks() {
+    store.set(STORE_TASKS, JSON.stringify(tasks));
+  }
+
+  function uniqueTaskId() {
+    const taken = {};
+    tasks.items.forEach(function (task) { taken[task.id] = true; });
+
+    let n = tasks.items.length + 1;
+    let id = "task" + n;
+    while (taken[id]) {
+      n += 1;
+      id = "task" + n;
+    }
+    return id;
+  }
+
+  // "2/4" once an estimate is set, plain "2" until then.
+  function taskCountText(task) {
+    return task.est > 0 ? task.used + "/" + task.est : String(task.used);
+  }
+
+  // The badge is updated where it stands rather than by rebuilding the list: a
+  // session can finish while the panel is open and a name is being typed.
+  function renderTaskCount(row, task) {
+    const count = row.querySelector(".task-count");
+    if (!count) return;
+    const met = task.est > 0 && task.used >= task.est;
+    count.textContent = taskCountText(task);
+    count.dataset.met = String(met);
+    // The colour is the only thing that says the estimate is met, so the tooltip
+    // says it in words as well.
+    count.title = "Focus sessions finished on this task" +
+      (met ? " - estimate met" : "");
+  }
+
+  function addTask(text) {
+    const trimmed = text.trim().slice(0, TASK_TEXT_MAX);
+    if (!trimmed || tasks.items.length >= TASK_MAX) return null;
+
+    const task = {
+      id: uniqueTaskId(), text: trimmed, done: false, est: 0, used: 0
+    };
+    tasks.items.push(task);
+    // The first task added becomes the one you are working on: adding a task and
+    // then having to point at it as well would be a step for nothing.
+    if (!tasks.current) tasks.current = task.id;
+    saveTasks();
+    renderTasks();
+    return task;
+  }
+
+  function removeTask(id) {
+    tasks.items = tasks.items.filter(function (task) { return task.id !== id; });
+    if (tasks.current === id) tasks.current = "";
+    saveTasks();
+    renderTasks();
+  }
+
+  // A finished task cannot be the one you are working on, so it lets go of the
+  // pointer on the way out. The sessions it already earned stay on it.
+  function toggleTaskDone(id) {
+    const task = taskById(id);
+    if (!task) return;
+    task.done = !task.done;
+    if (task.done && tasks.current === id) tasks.current = "";
+    saveTasks();
+    renderTasks();
+  }
+
+  function setCurrentTask(id) {
+    const task = taskById(id);
+    if (!task || task.done) return;
+    // Choosing the task you are already on lets it go again.
+    tasks.current = tasks.current === id ? "" : id;
+    saveTasks();
+    renderTasks();
+  }
+
+  // Called when a focus session finishes. Breaks are not work, so they never
+  // reach this.
+  function countTaskSession() {
+    const task = taskById(tasks.current);
+    if (!task || task.done) return;
+    task.used = Math.min(TASK_USED_MAX, task.used + 1);
+    saveTasks();
+
+    const row = el.taskList.querySelector('.task[data-id="' + task.id + '"]');
+    if (row) {
+      renderTaskCount(row, task);
+      renderCurrentTask();
+    } else {
+      renderTasks();
+    }
+  }
+
+  function focusInTask(id, className) {
+    const row = el.taskList.querySelector('.task[data-id="' + id + '"]');
+    if (!row) return;
+    const target = className ? row.querySelector("." + className) : null;
+    (target || row).focus();
+  }
+
+  function buildTaskRow(task) {
+    const row = document.createElement("li");
+    row.className = "task";
+    row.dataset.id = task.id;
+    row.dataset.done = String(task.done);
+    row.dataset.current = String(tasks.current === task.id);
+    // The row is what you drag, but a field inside it keeps its own behaviour,
+    // so selecting text in a name is still selecting text.
+    row.draggable = true;
+
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "task-pick";
+    pick.textContent = tasks.current === task.id ? "\u25c9" : "\u25cb";
+    pick.setAttribute("aria-pressed", String(tasks.current === task.id));
+    pick.title = tasks.current === task.id
+      ? "Stop working on this task"
+      : "Work on this task";
+    pick.setAttribute("aria-label", pick.title + ": " + task.text);
+    pick.disabled = task.done;
+    pick.addEventListener("click", function () { setCurrentTask(task.id); });
+    row.appendChild(pick);
+
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "task-done";
+    done.textContent = "\u2713";
+    // A checkbox is what this is, so it says so rather than pretending to be a
+    // button that happens to toggle.
+    done.setAttribute("role", "checkbox");
+    done.setAttribute("aria-checked", String(task.done));
+    done.title = task.done ? "Mark as not done" : "Mark as done";
+    done.setAttribute("aria-label", done.title + ": " + task.text);
+    done.addEventListener("click", function () { toggleTaskDone(task.id); });
+    row.appendChild(done);
+
+    const text = document.createElement("input");
+    text.type = "text";
+    text.className = "task-text";
+    text.value = task.text;
+    text.maxLength = TASK_TEXT_MAX;
+    text.setAttribute("aria-label", "Task");
+    // Typing saves as it goes and never re-renders the row: rebuilding the list
+    // would take the caret out of the field being typed into.
+    text.addEventListener("input", function () {
+      if (!text.value.trim()) return;
+      task.text = text.value.slice(0, TASK_TEXT_MAX);
+      saveTasks();
+      renderCurrentTask();
+    });
+    // A blank field is allowed while typing, then the last readable name comes
+    // back: a task with no name is not something anyone can work on.
+    text.addEventListener("blur", function () { text.value = task.text; });
+    row.appendChild(text);
+
+    const est = document.createElement("input");
+    est.type = "number";
+    est.className = "task-est";
+    est.min = "0";
+    est.max = String(TASK_EST_MAX);
+    est.value = task.est > 0 ? String(task.est) : "";
+    est.placeholder = "est";
+    est.title = "How many focus sessions you expect this to take";
+    est.setAttribute("aria-label", "Focus sessions estimated for this task");
+    row.appendChild(est);
+
+    const count = document.createElement("span");
+    count.className = "task-count";
+    row.appendChild(count);
+    renderTaskCount(row, task);
+
+    // The estimate updates the row in place for the same reason the name does.
+    est.addEventListener("input", function () {
+      const value = clampInt(est.value, 0, TASK_EST_MAX, 0);
+      if (value === task.est) return;
+      task.est = value;
+      saveTasks();
+      renderTaskCount(row, task);
+      renderCurrentTask();
+    });
+    est.addEventListener("blur", function () {
+      est.value = task.est > 0 ? String(task.est) : "";
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "task-del";
+    del.textContent = "\u00d7";
+    del.title = "Delete this task";
+    del.setAttribute("aria-label", "Delete the task " + task.text);
+    del.addEventListener("click", function () { removeTask(task.id); });
+    row.appendChild(del);
+
+    row.addEventListener("dragstart", function (event) {
+      dragTaskId = task.id;
+      row.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      // Firefox refuses to start a drag with nothing on the clipboard.
+      event.dataTransfer.setData("text/plain", task.text);
+    });
+    row.addEventListener("dragend", function () {
+      row.classList.remove("dragging");
+      commitTaskOrder();
+    });
+
+    return row;
+  }
+
+  // The rows are the truth after a drag, so the order is read back out of the
+  // DOM rather than tracked through every dragover event - there is nothing to
+  // drift out of step that way.
+  function commitTaskOrder() {
+    if (!dragTaskId) return;
+    dragTaskId = "";
+
+    const order = [];
+    Array.prototype.forEach.call(el.taskList.children, function (row) {
+      const task = taskById(row.dataset.id);
+      if (task) order.push(task);
+    });
+    // A row that somehow lost its task must not delete it by omission.
+    if (order.length === tasks.items.length) tasks.items = order;
+    saveTasks();
+    renderTasks();
+  }
+
+  // The row follows the pointer, so it lands where it is dropped rather than
+  // jumping a whole row at a time.
+  el.taskList.addEventListener("dragover", function (event) {
+    if (!dragTaskId) return;
+    event.preventDefault();
+
+    const dragged = el.taskList.querySelector(".task.dragging");
+    const over = event.target.closest ? event.target.closest(".task") : null;
+    if (!dragged || !over || over === dragged) return;
+
+    const box = over.getBoundingClientRect();
+    const after = event.clientY > box.top + box.height / 2;
+    el.taskList.insertBefore(dragged, after ? over.nextSibling : over);
+  });
+
+  // Notion's own idiom: hold Alt and press an arrow key to move the row you are
+  // in, from the field you are already typing in. The global shortcuts bail out
+  // when Alt is held, so nothing here can steal the timer's keys.
+  el.taskList.addEventListener("keydown", function (event) {
+    if (!event.altKey) return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+    const row = event.target.closest ? event.target.closest(".task") : null;
+    if (!row) return;
+
+    const id = row.dataset.id;
+    let index = -1;
+    tasks.items.forEach(function (task, i) { if (task.id === id) index = i; });
+    const to = index + (event.key === "ArrowUp" ? -1 : 1);
+    if (index < 0 || to < 0 || to >= tasks.items.length) return;
+
+    event.preventDefault();
+    const held = event.target.className;
+    const moved = tasks.items.splice(index, 1)[0];
+    tasks.items.splice(to, 0, moved);
+    saveTasks();
+    renderTasks();
+    focusInTask(id, held);
+  });
+
+  function renderTasks() {
+    // The pointer is checked here rather than trusted: importing a backup,
+    // deleting a task or finishing one can all leave it pointing at nothing.
+    if (tasks.current && !taskById(tasks.current)) tasks.current = "";
+
+    el.taskList.textContent = "";
+    tasks.items.forEach(function (task) {
+      el.taskList.appendChild(buildTaskRow(task));
+    });
+
+    const finished = tasks.items.filter(function (task) {
+      return task.done;
+    }).length;
+    el.taskActions.hidden = finished === 0;
+
+    el.taskHint.textContent = tasks.items.length
+      ? "Alt and the arrow keys move a task. A focus session you finish counts " +
+        "against the task you are working on."
+      : "No tasks yet. Add one above - it becomes the task you are working on, " +
+        "and every focus session you finish is counted against it.";
+
+    renderCurrentTask();
+  }
+
+  // The task list you have to open is the task list you stop looking at, so the
+  // timer screen says what you are working on as well.
+  function renderCurrentTask() {
+    const task = taskById(tasks.current);
+
+    if (!task || task.done) {
+      el.taskCurrent.hidden = true;
+      el.taskCurrentText.textContent = "";
+      el.taskCurrentCount.textContent = "";
+      return;
+    }
+
+    const count = taskCountText(task);
+    el.taskCurrent.hidden = false;
+    el.taskCurrentText.textContent = task.text;
+    el.taskCurrentCount.textContent = count;
+    el.taskCurrent.title = "Open your tasks";
+    el.taskCurrent.setAttribute(
+      "aria-label",
+      "Open your tasks. Working on " + task.text + ", " +
+      (task.est > 0
+        ? count + " sessions finished of " + task.est + " estimated"
+        : task.used + (task.used === 1
+          ? " session finished"
+          : " sessions finished")) +
+      "."
+    );
+  }
+
+  function openTasks() {
+    renderTasks();
+    el.tasksModal.hidden = false;
+    // Straight into the one field worth typing in, the way the drawer is not
+    // opened just to be looked at.
+    el.taskInput.focus();
+  }
+
+  function closeTasks() {
+    el.tasksModal.hidden = true;
+    el.tasksOpen.focus();
+  }
+
+  function addTaskFromInput() {
+    const full = tasks.items.length >= TASK_MAX;
+    const task = addTask(el.taskInput.value);
+    // Emptying and refocusing the field is what makes five tasks in a row
+    // bearable: type, Enter, type, Enter.
+    el.taskInput.value = "";
+    el.taskInput.focus();
+    if (!task && full) {
+      el.taskHint.textContent =
+        "That is the limit of " + TASK_MAX + " tasks. Delete one to add another.";
+    }
+  }
+
+  // Finished tasks are kept - finishing one is a small ceremony and having it
+  // vanish would feel like a bug - so clearing them is a deliberate act, and one
+  // that says how much it is about to take.
+  function clearDoneTasks() {
+    const finished = tasks.items.filter(function (task) { return task.done; });
+    if (!finished.length) return;
+
+    const confirmed = window.confirm(
+      "Delete " + finished.length + (finished.length === 1
+        ? " finished task?"
+        : " finished tasks?") +
+      "\n\nThis cannot be undone."
+    );
+    if (!confirmed) return;
+
+    tasks.items = tasks.items.filter(function (task) { return !task.done; });
+    saveTasks();
+    renderTasks();
+  }
+
+  el.tasksOpen.addEventListener("click", openTasks);
+  el.taskCurrent.addEventListener("click", openTasks);
+  el.tasksClose.addEventListener("click", closeTasks);
+  el.taskAddBtn.addEventListener("click", addTaskFromInput);
+  el.taskClearDone.addEventListener("click", clearDoneTasks);
+
+  el.tasksModal.addEventListener("click", function (event) {
+    if (event.target.dataset.close) closeTasks();
+  });
+
+  el.taskInput.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addTaskFromInput();
+  });
+
   document.addEventListener("keydown", function (event) {
     if (event.key !== "Escape") return;
     // Whichever overlay is open, Escape closes it.
     if (!el.settingsPanel.hidden) closeSettings();
     else if (!el.calendarModal.hidden) closeCalendar();
+    else if (!el.tasksModal.hidden) closeTasks();
   });
 
   // Space starts and pauses, R resets - the two things a session needs while
@@ -3433,10 +4032,10 @@
 
   /* ---------- backup and restore ---------- */
 
-  // Bumped when day records gained a per-tag breakdown. Import never checks
-  // this, so an older backup still loads; it is there purely to make the file
-  // self-describing.
-  const BACKUP_VERSION = 2;
+  // Bumped when day records gained a per-tag breakdown, and again when tasks
+  // joined the backup. Import never checks this, so an older backup still
+  // loads; it is there purely to make the file self-describing.
+  const BACKUP_VERSION = 3;
 
   function showDataStatus(message, state) {
     el.dataStatus.textContent = message;
@@ -3455,7 +4054,8 @@
       exportedAt: new Date().toISOString(),
       completed: completed,
       settings: settings,
-      days: days
+      days: days,
+      tasks: tasks
     };
   }
 
@@ -3476,8 +4076,10 @@
       link.click();
       link.remove();
 
+      const dayCount = Object.keys(days).length;
       showDataStatus(
-        "Backup downloaded: " + Object.keys(days).length + " days of history.",
+        "Backup downloaded: " + dayCount + (dayCount === 1 ? " day" : " days") +
+        " of history.",
         "ok"
       );
     } catch (err) {
@@ -3501,6 +4103,15 @@
 
     store.set(STORE_DAYS, JSON.stringify(days));
     store.set(STORE_COMPLETED, String(completed));
+
+    // A backup made before tasks existed simply has no tasks in it, and that is
+    // not the same as a backup that says there are none: an old file must not
+    // wipe the to-do list you are in the middle of. A list that is present -
+    // even an empty one - is taken at its word.
+    if (raw.tasks) {
+      tasks = sanitizeTasks(raw.tasks);
+      store.set(STORE_TASKS, JSON.stringify(tasks));
+    }
 
     // Settings are optional in a backup, and are re-validated either way.
     if (raw.settings) {
@@ -3534,8 +4145,14 @@
     renderBackdropChoice();
     renderGreeting();
     renderStats();
+    renderTasks();
 
-    return { days: Object.keys(days).length, sessions: completed };
+    return {
+      days: Object.keys(days).length,
+      sessions: completed,
+      // null when the file predates tasks: the list was kept, not restored.
+      tasks: raw.tasks ? tasks.items.length : null
+    };
   }
 
   function handleImportFile(file) {
@@ -3557,9 +4174,13 @@
         return;
       }
 
+      const taskNote = result.tasks
+        ? " Your " + result.tasks + (result.tasks === 1 ? " task" : " tasks") +
+          " came back with it."
+        : "";
       showDataStatus(
         "Restored " + result.days + (result.days === 1 ? " day" : " days") +
-        " of history and " + result.sessions + " sessions.",
+        " of history and " + result.sessions + " sessions." + taskNote,
         "ok"
       );
     };
@@ -3569,13 +4190,13 @@
     reader.readAsText(file);
   }
 
-  // Erasing keeps durations, sound, and name on purpose - the history is the
-  // thing you actually cannot recreate.
+  // Erasing keeps durations, sound, name and tasks on purpose - the history is
+  // the thing you actually cannot recreate, and a to-do list is not history.
   function eraseHistory() {
     const confirmed = window.confirm(
       "Erase all focus history and the session count?\n\n" +
-      "Your durations, sound, and name are kept. This cannot be undone, so " +
-      "export a backup first if you are not sure."
+      "Your durations, sound, name and tasks are kept. This cannot be undone, " +
+      "so export a backup first if you are not sure."
     );
     if (!confirmed) return;
 
@@ -3629,6 +4250,7 @@
   renderBackdropChoice();
   renderGreeting();
   renderStats();
+  renderTasks();
   render();
 
   // Tell the user up front when saving is impossible, rather than letting

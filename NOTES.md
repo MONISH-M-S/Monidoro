@@ -118,6 +118,19 @@ and pushed.
 - Confetti falls for a finished focus session: DOM nodes animated by one CSS
   keyframe, and one timer takes them away. Nothing falls if the system asks for
   reduced motion, where the flower opening is the celebration on its own
+- A task list, in a dialog of its own and in the app's own idiom rather than
+  Notion's: type a name, press Enter, type the next. Each task is a checkbox, an
+  editable name, an optional estimate of how many focus sessions it should take
+  and a count of how many it has actually had, and the one you are *working on*
+  is marked with a dot. A finished focus session is counted against that task,
+  which is the whole reason the list is in a timer rather than in a notes app.
+  The task you are working on is also shown under the timer, because a list you
+  have to open is a list you stop looking at, and clicking that line opens the
+  list. Rows are reordered by dragging, or with Alt and the arrow keys from the
+  field you are already typing in. Finished tasks stay until they are cleared,
+  which says how many it is about to take. Alt + arrows aside, every control is
+  a button with a label, and the list is capped so a runaway import cannot fill
+  the store
 
 ## Storage keys (localStorage)
 
@@ -130,6 +143,7 @@ erase anyone's history.
 | `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, ambient, ambientVolume, backdrop, backdropDim, name, tags, activeTag}` |
 | `monidoro.completed` | total focus sessions ever, as a string number |
 | `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds, byTag?}}` |
+| `monidoro.tasks` | `{current, items: [{id, text, done, est, used}]}` |
 | `monidoro.photo` | a `data:image/jpeg` URL for the chosen background photo |
 
 `settings.tags` is `[{id, name, color}]` — `id` is a lowercase slug built
@@ -139,13 +153,36 @@ history filed under it. `byTag` is `{tagId: {sessions, seconds}}` and is
 shape they already had. There is no migration pass and reading old history never
 rewrites it.
 
-`settings.backdrop` is one of `plain | dunes | aurora | forest | grid | stars |
-photo`, and `backdropDim` is the scrim strength over a photo (0-85). The photo
+`settings.backdrop` is one of `plain | dunes | aurora | grid | space | photo`, and
+`backdropDim` is the scrim strength over a photo (0-85). A stored `"stars"` is
+mapped forward to `space` by `sanitizeSettings()` before the list is checked, the
+way `swanLong` became `swanArchive` — see gotcha 8. The photo
 itself lives in its own key rather than in `settings`, for two reasons: it is big
 enough to make every backup file unwieldy, and it is tied to the browser it was
 picked in. A backup therefore carries `backdrop: "photo"` but not the image, and
 `sanitizeSettings()` turns that back into `plain` when there is no photo — a
 restored backup shows a preset instead of an empty page.
+
+`monidoro.tasks` keeps the list **and** the pointer to the task being worked on
+in one record, so a pointer can never arrive without the list it points into.
+`text` is capped at 200 characters and `est`/`used` at 99 and 9999, an id is a
+lowercase slug built internally like a tag's, and `sanitizeTasks()` drops an
+entry that cannot be read rather than guessing — including a duplicate id, since
+every lookup is by id and a duplicate would leave one row unreachable and
+undeletable. `current` is kept only when it lands on a task that is really there,
+so a stored pointer cannot outlive its task.
+
+Two rules for a to-do list that is not history:
+
+- **A backup that predates tasks must not wipe the list.** An old file has no
+  `tasks` key at all, and absent means "this backup was made before tasks
+  existed", not "there were none" — so `applyBackup()` leaves the existing list
+  alone when the key is missing and takes it at its word when it is present,
+  empty list included. The status line only mentions tasks when the file actually
+  carried any.
+- **Erasing history does not erase tasks.** The erase button is about the record
+  of time spent, which is the only thing that cannot be recreated; a task list
+  can be typed again, and it is your work rather than the app's log.
 
 Four tagging rules worth keeping:
 
@@ -190,7 +227,7 @@ Two rules that must not be broken:
 Nothing here is half-finished. Everything asked for so far is in and described
 above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
-files of your own (11) and the bundled lofi track (12).
+files of your own (11), the bundled lofi track (12) and the task list (13).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -199,16 +236,30 @@ ever prompt.
 
 What is worth doing next, in the order it was raised:
 
-- **A contrast pass over the backdrops.** The text has to stay readable over six
+- **A contrast pass over the backdrops.** The text has to stay readable over five
   gradients and over any photo the user brings, and "looks fine in dark mode on
-  aurora" is not a measurement.
+  aurora" is not a measurement. The task dialog belongs in it too: it has more
+  small controls than anything else in the app, and its hint is the only text
+  sitting at the same size as the mutest colour.
 - **More focus noises** — waves, wind, fire — synthesised in the page like rain
   and cafe, so nothing new has to be downloaded or licensed.
 - **Deeper history statistics**: weekly bars, averages and per-tag trends on top
   of the heatmap that is already there.
-- **A to-do list.** Asked for in one breath with "and stuff", so the shape is
-  still open: a checklist beside the timer, tasks that belong to sessions, or a
-  plan for the day. Decide the shape before writing any of it.
+- **The next slice of the task list**, in the order it is most likely to be
+  wanted:
+  - **Subtasks**, i.e. an indent level, which is the one Notion idea this
+    deliberately left out. It changes the shape of the list (a tree, not a row
+    of items) and every reorder and count has to decide what a parent's count
+    means, so it is a feature of its own rather than a tweak.
+  - **Reordering on a touch screen.** Drag and drop is a mouse gesture and Alt
+    and the arrow keys need a keyboard, so on a phone the order is fixed. A
+    press-and-hold drag, or an explicit move mode, is the answer.
+  - **A due date or a "today" list.** The app has no notion of a day's plan yet.
+    A task belongs to no day at all right now, which is what keeps the daily
+    goal and the streaks about time rather than about chores.
+  - **A tag per task**, so the history filter and the task you were on could be
+    read together. Deliberately not in: the session's tag already comes from the
+    chip row and two sources of the same label is how they drift apart.
 
 Ideas raised along the way and deliberately not pursued, so nobody re-opens them
 by accident:
@@ -484,6 +535,28 @@ by accident:
     sky would leave dark text on a dark background the moment the theme flipped.
     Any new preset has to survive that double check before it ships.
 
+25. **A list you rebuild under a caret is a list that swallows what you type.**
+    The task rows save as you type, so typing in a name may not re-render the
+    list: `renderTasks()` replaces every row with a fresh element, which takes
+    the caret with it and makes a name field drop keystrokes. Only a change that
+    alters the *shape* of the list — adding, deleting, finishing, reordering,
+    importing — rebuilds it, and everything else updates the one node it touches.
+    That includes a session finishing while the panel is open: the badge is
+    repainted where it stands (`renderTaskCount()`), because a session can end
+    while a name is half-typed. The move with Alt and an arrow key *is* a
+    rebuild, so it hands focus back to the same field on the moved row by class
+    name afterwards. Verified by typing into a name, letting a session finish
+    under it, and checking that focus and the text are both still there.
+
+26. **Absent is not the same as empty.** A backup made before the task list
+    existed has no `tasks` key, and a restore that treats a missing key as "an
+    empty list" silently deletes the work someone is in the middle of. So the
+    importer replaces the list only when the file actually carries one, and an
+    old file restores history and leaves the tasks alone. The same distinction
+    shows up in the app itself: an empty list and a list of one unnamed task are
+    different states, which is why a name cleared to nothing springs back on blur
+    rather than becoming a row nobody can read.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -514,6 +587,22 @@ picker. The bundled lofi track was measured rather than trusted, before and
 after its conversion: -9.8 LUFS and +0.1 dBTP going in, -18 LUFS coming out, and
 the decoded file read back for duration, RMS and peak instead of believing the
 encoder.
+
+The task list was driven the same way, through the real controls: three tasks
+typed into the field and added with a dispatched Enter, the estimate set and the
+badge read back, the pointer moved with the dot button, a name renamed and
+cleared and the label on the timer screen checked after each, a drag performed
+with real `DragEvent`s and a `DataTransfer`, and the move with Alt and an arrow
+key checked for both the order in the DOM and the order written to storage and
+for where focus ended up. A focus session was then run to its end with a short
+`?focusSec=2` and the counter, the badge and the line under the timer all read
+back — including the case where the session ends while a name is being typed.
+Clear-finished was checked against a stubbed `confirm` (both answers), the
+export blob was captured and parsed rather than downloaded, and the importer was
+fed a file with a duplicate id, an uppercase id, a blank name, a 300-character
+name and `used: -4` — all five handled exactly as the sanitizer promises. A
+backup with no `tasks` key at all was imported last, to prove the list survives
+it.
 
 Keep that bar. It has already paid for itself twice.
 
