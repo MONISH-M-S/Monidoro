@@ -357,7 +357,6 @@
           <button type="button" data-sound="chiptune">Chiptune</button>
           <button type="button" data-sound="blip">Blip</button>
           <button type="button" data-sound="bell">Bell</button>
-          <button type="button" data-sound="swan">Swan Lake</button>
         </div>
       </div>
 
@@ -368,6 +367,7 @@
           <button type="button" data-ambient="rain">Rain</button>
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
+          <button type="button" data-ambient="swan">Swan Lake</button>
         </div>
         <p class="hint">Plays only while a focus session runs. Picking one previews it.</p>
       </div>
@@ -462,11 +462,11 @@
   /* ---------- configuration ---------- */
 
   const params = new URLSearchParams(location.search);
-  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell", "swan"];
+  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
   const THEME_CHOICES = ["system", "light", "dark"];
   // Focus noise is synthesised too, so the app still ships as one file with no
   // audio assets and keeps working offline.
-  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe"];
+  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan"];
 
   // Accents are restricted to a plain six-digit hex colour, so a hand-edited
   // or imported value can never smuggle anything else into the stylesheet.
@@ -1151,28 +1151,6 @@
       tone(1046.5, now, 1.6, "sine", 0.34);
       tone(1568, now + 0.02, 1.1, "sine", 0.13);
       tone(2093, now + 0.04, 0.7, "sine", 0.07);
-    },
-    // Tchaikovsky, Swan Lake Op. 20, Act II No. 10 (1876) - public domain, so
-    // it can be synthesised here rather than shipped as an asset. B minor (two
-    // sharps). A triangle wave reads as a music box: the held opening F#5, the
-    // answering run up to E5, then the closing turn on D5. Melody only - a drone
-    // under it muddies the low end on laptop speakers. Whole thing runs about
-    // 3.4s, so it stays an alert rather than a tune.
-    swan: function (now) {
-      const melody = [
-        [739.99, 0,    0.85], // F#5, held
-        [493.88, 0.9,  0.3],  // B4
-        [554.37, 1.16, 0.3],  // C#5
-        [587.33, 1.42, 0.3],  // D5
-        [659.25, 1.68, 0.3],  // E5
-        [739.99, 1.94, 0.3],  // F#5
-        [587.33, 2.2,  0.3],  // D5
-        [739.99, 2.46, 0.3],  // F#5
-        [587.33, 2.72, 0.72]  // D5, held
-      ];
-      melody.forEach(function (note) {
-        tone(note[0], now + note[1], note[2], "triangle", 0.26);
-      });
     }
   };
 
@@ -1227,6 +1205,46 @@
       ]
     }
   };
+
+  // Swan Lake is a melody, so unlike the noises above it is not a filtered noise
+  // buffer but a list of notes. Tchaikovsky, Op. 20, Act II No. 10 (1876) -
+  // public domain, synthesised here rather than shipped as an asset. This is the
+  // complete swan theme everyone means by "Swan Lake": the A phrase and its
+  // answer, then the rising B phrase, repeated. It loops under a focus session.
+  //
+  // [MIDI note, beats], 4/4, sixty beats in all - 45s at 80bpm. Pitches and
+  // durations are read from the public-domain engraving's MusicXML (bars 2-16),
+  // not played by ear, which is why they are MIDI numbers with a beat count
+  // rather than the hand-picked frequencies the alert sounds use. Bar numbers in
+  // the comments match that score, so the data can be checked against it.
+  const SWAN = {
+    bpm: 80,
+    trim: 1.1,
+    notePeak: 0.5,
+    notes: [
+      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],              // bar 2
+      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],                       // bar 3
+      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5], // bar 4
+      [71, 2], [71, 0.5], [76, 0.5], [74, 0.5], [73, 0.5],              // bar 5
+      [78, 2], [71, 0.5], [73, 0.5], [74, 0.5], [76, 0.5],              // bar 6
+      [78, 1.5], [74, 0.5], [78, 1.5], [74, 0.5],                       // bar 7
+      [78, 1.5], [71, 0.5], [74, 0.5], [71, 0.5], [67, 0.5], [74, 0.5], // bar 8
+      [71, 3], [71, 1],                                                 // bar 9
+      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],                  // bar 10
+      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],              // bar 11
+      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5],              // bar 12
+      [85, 1.5], [83, 0.5], [78, 0.5], [74, 0.5], [73, 0.5], [71, 0.5], // bar 13
+      [73, 1], [74, 1], [76, 1], [78, 0.5], [79, 0.5],                  // bar 14
+      [81, 1.5], [79, 0.5], [78, 1], [79, 0.5], [81, 0.5],              // bar 15
+      [83, 1.5], [81, 0.5], [79, 1], [81, 0.5], [83, 0.5]               // bar 16
+    ]
+  };
+
+  // Equal temperament from A4 = 440. Kept as a helper so the melody can be
+  // written as note numbers rather than a column of frequencies to mistype.
+  function noteHz(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
 
   let noiseCache = null;
   let ambientNodes = null;
@@ -1289,9 +1307,14 @@
 
   function stopAmbientNodes() {
     if (!ambientNodes) return;
-    const playing = ambientNodes.sources;
+    const playing = ambientNodes;
     ambientNodes = null;
-    playing.forEach(function (node) {
+    // The melody re-arms itself with a timer, so it has to be cancelled here or
+    // a stopped sound would schedule the next statement back into life.
+    if (playing.melodyId !== undefined && playing.melodyId !== null) {
+      clearTimeout(playing.melodyId);
+    }
+    playing.sources.forEach(function (node) {
       try { node.stop(); } catch (err) { /* already stopped */ }
     });
   }
@@ -1308,28 +1331,42 @@
     stopAmbientNodes();
   }
 
+  // The master gain and safety limiter are the same for a noise and for the
+  // melody, so both build them here. The limiter threshold deliberately sits
+  // just under 0 dB. Noise is dense, so a compressor with a low threshold
+  // reduces the signal *continuously* rather than catching peaks - measured, a
+  // -3 dB threshold was squashing the output to about 40% of the intended level.
+  // Up here it only engages on a genuine overshoot, which is exactly what a
+  // safety net should do.
+  function makeAmbientOutput(trim) {
+    const master = audioCtx.createGain();
+    master.gain.value = ambientGain() * trim;
+
+    const limiter = audioCtx.createDynamicsCompressor();
+    limiter.threshold.value = -1;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    limiter.connect(audioCtx.destination);
+    master.connect(limiter);
+
+    return { master: master, limiter: limiter };
+  }
+
   function startAmbientNodes() {
     if (ambientNodes || !audioCtx) return;
+    if (settings.ambient === "swan") {
+      startSwanPlayer();
+      return;
+    }
     const spec = AMBIENT[settings.ambient];
     if (!spec) return;
 
     try {
-      const master = audioCtx.createGain();
-      master.gain.value = ambientGain() * (spec.trim || 1);
-
-      // Threshold deliberately sits just under 0 dB. Noise is dense, so a
-      // compressor with a low threshold reduces the signal *continuously*
-      // rather than catching peaks - measured, a -3 dB threshold was squashing
-      // the output to about 40% of the intended level. Up here it only engages
-      // on a genuine overshoot, which is exactly what a safety net should do.
-      const limiter = audioCtx.createDynamicsCompressor();
-      limiter.threshold.value = -1;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 20;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.25;
-      limiter.connect(audioCtx.destination);
-      master.connect(limiter);
+      const output = makeAmbientOutput(spec.trim || 1);
+      const master = output.master;
+      const limiter = output.limiter;
 
       // The tremolo sits between the layers and the master so the slow swell
       // can be added without the master's own level interfering with its depth.
@@ -1380,6 +1417,79 @@
     } catch (err) {
       ambientNodes = null;
     }
+  }
+
+  // The swan theme cannot ride the buffer-source graph above, so it is
+  // scheduled one whole statement at a time and re-armed as it runs out, which
+  // loops it for as long as the focus session lasts.
+  function startSwanPlayer() {
+    try {
+      const output = makeAmbientOutput(SWAN.trim);
+      const player = {
+        sources: [],
+        master: output.master,
+        limiter: output.limiter,
+        trim: SWAN.trim,
+        melodyId: null
+      };
+      ambientNodes = player;
+      scheduleSwanStatement(player);
+    } catch (err) {
+      ambientNodes = null;
+    }
+  }
+
+  function scheduleSwanStatement(player) {
+    // Every note of the previous statement has finished by now - they are timed
+    // to end on the seam - so this is only a belt-and-braces stop.
+    player.sources.forEach(function (node) {
+      try { node.stop(); } catch (err) { /* already stopped */ }
+    });
+    player.sources = [];
+
+    const beat = 60 / SWAN.bpm;
+    const start = audioCtx.currentTime + 0.06;
+    const total = SWAN.notes.reduce(function (sum, note) {
+      return sum + note[1];
+    }, 0) * beat;
+    // Long enough to join a note to the next one, short enough that repeated
+    // notes still separate.
+    const release = 0.14;
+    let at = 0;
+
+    SWAN.notes.forEach(function (note) {
+      const t0 = start + at;
+      const duration = note[1] * beat;
+      // The release runs *past* the note and into the next one, which is what
+      // makes a phrase legato instead of a row of separate pings. The final note
+      // is clipped to end exactly on the seam, so a loop never cuts a tail.
+      const noteEnd = Math.min(t0 + duration + release, start + total);
+      const holdEnd = Math.max(t0 + 0.02, noteEnd - release);
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = noteHz(note[0]);
+      // Fast attack, HOLD, short release. Deliberately NOT the alert sounds'
+      // pluck envelope (quick attack, then decay across the whole note), which
+      // is why a melody built from those read as individual notes.
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(SWAN.notePeak, t0 + 0.015);
+      gain.gain.setValueAtTime(SWAN.notePeak, holdEnd);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteEnd);
+      osc.connect(gain);
+      gain.connect(player.master);
+      osc.start(t0);
+      osc.stop(noteEnd + 0.05);
+      player.sources.push(osc);
+      at += duration;
+    });
+
+    // Re-arm just before the statement runs out, so the loop has no audible gap.
+    player.melodyId = setTimeout(function () {
+      player.melodyId = null;
+      if (ambientNodes === player) scheduleSwanStatement(player);
+    }, Math.max(0, total * 1000 - 100));
   }
 
   function applyAmbientVolume() {

@@ -35,8 +35,7 @@ and pushed.
 - Presets: Classic 25/5, Deep 50/10, Ultradian 90/20
 - Custom focus / break / long-break lengths, sessions per set, daily goal
 - Daily goal progress bar (minutes) and current / best streaks
-- Five synthesised alert sounds via Web Audio — no audio files: Classic,
-  Chiptune, Blip, Bell, and Swan Lake (Tchaikovsky, public domain)
+- Four synthesised alert sounds via Web Audio — no audio files
 - Optional profile name, shown as a greeting
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
@@ -44,7 +43,8 @@ and pushed.
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, with a volume slider. Plays only while a focus session runs
+  filtered, plus the Swan Lake theme (Tchaikovsky, public domain) played as a
+  looping melody, with a volume slider. Plays only while a focus session runs
 
 ## Storage keys (localStorage)
 
@@ -175,10 +175,21 @@ focusing and dies if you bail early.
    threshold was squashing the *whole* signal to about 40% of its intended level
    rather than catching peaks, because noise is dense enough to keep a
    compressor engaged continuously. It now sits at -1 dB and reports 0.00 dB of
-   reduction, which is what a safety net should look like. Swan Lake was held to
-   the same bar: rendered offline it peaks at 0.25 with no clipping, runs 3.44 s
-   so it stays an alert, and the zero-crossing rate of each note read back at the
-   frequency it was meant to be (F♯5 740, B4 494, C♯5 554, D5 587, E5 659).
+   reduction, which is what a safety net should look like.
+
+10. **A melody is not a row of chimes.** The alert sounds decay across the whole
+    note - a pluck. Right for a "ding", wrong for a tune: the Swan Lake theme
+    first used that envelope and read as individual notes, each fading to silence
+    before the next began. It now gives every note a fast attack, a *hold* for its
+    written length, and a short release that runs past the note into the next one,
+    which is what makes a phrase legato. Measured on an `OfflineAudioContext`: the
+    opening held note keeps its level (RMS 0.207 early vs 0.207 late, where a
+    pluck decays away) and the quietest 20 ms across a note join is 0.176, not
+    silence. Pitch and rhythm come from the public-domain engraving's MusicXML
+    (bars 2-16), not the ear, so the data is MIDI numbers plus a beat count and
+    can be re-checked against that score. The melody also needed its own level:
+    sustained and legato it is far denser than a pluck, so it is trimmed to match
+    the noises' RMS rather than their peak.
 
 ## How features were verified
 
