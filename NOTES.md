@@ -5,13 +5,14 @@
 > you are fully caught up. Nothing is lost.
 >
 > **The order for new work is the list under "Remaining work"**, and it is kept
-> in the order it was agreed: the contrast pass over the backdrops and the
-> panels is done (14), and the one thing it turned up but could not fix — the
-> accent swatches and the tag colours, which are mid-tones — is written up there
-> with its measurements. After that: more focus noises, then deeper history
-> statistics, then the next slice of the task list. Nothing there is started —
-> the tree is clean, and every feature described below was committed and pushed
-> as it was finished.
+> in the order it was agreed. Done: the contrast pass over the backdrops and the
+> panels (14) and the extra focus noises (15). What the contrast pass turned up
+> but could not fix — the accent swatches and the tag colours, which are
+> mid-tones — is written up there with its measurements; it is the one item on
+> that list that is a repair rather than a new slice, and it comes first. After
+> that: deeper history statistics, then the next slice of the task list. Nothing
+> there is started — the tree is clean, and every feature described below was
+> committed and pushed as it was finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -81,16 +82,25 @@ and pushed.
   14). Pure CSS and canvas means no files and nothing downloaded
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
-- Focus sound: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, plus three real recordings, all looped and all through one volume
-  slider: `swan-lake.ogg` ("Swan Lake Vintage" — Barbirolli, 1933, the Scene
-  alone, 2:30), `swan-lake-archive.ogg` ("Swan Lake European" — European Archive,
+- Focus sound: six synthesised noises — rain, brown and cafe, and then waves,
+  wind and fire — built from two noise buffers and filters, plus three real
+  recordings, all looped and all through one volume slider: `swan-lake.ogg`
+  ("Swan Lake Vintage" — Barbirolli, 1933, the Scene alone, 2:30),
+  `swan-lake-archive.ogg` ("Swan Lake European" — European Archive,
   the Scene and on into the rest of Act II, 4:10) and `lofi.ogg` ("Lofi" — a CC0
   instrumental, 3:35). All three files were levelled to the same loudness on
   disk, so switching between them does not call for a different slider position.
   With a file missing, that choice plays the app's own transcription of the
   Scene, taken from the engraving's MusicXML (215 notes, 182 s, looped), so the
-  choice is never silent. Plays only while a focus session runs
+  choice is never silent. Two of the noises are not a still texture: a layer's
+  filter can be swept while it plays, which is the surf band in Waves and the
+  whistle in Wind, both at a rate that deliberately does not divide into the
+  swell's so the loop never lands back where it started. Fire throws off single
+  crackles instead, scheduled one at a time with a random gap between them,
+  because a loop of them would repeat its pattern of pops within a minute. All
+  six are levelled to the same RMS by rendering each offline and computing the
+  trim, so the slider position means the same thing whichever you pick. Plays
+  only while a focus session runs
 - Music of your own as a focus sound: files kept beside the page are shuffled
   when the session starts and played one after another, and a single file picked
   by hand plays for that visit. It is chosen from its own section in Customize
@@ -255,8 +265,8 @@ Two rules that must not be broken:
 Nothing here is half-finished. Everything asked for so far is in and described
 above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
-files of your own (11), the bundled lofi track (12), the task list (13) and the
-contrast pass (14).
+files of your own (11), the bundled lofi track (12), the task list (13), the
+contrast pass (14) and the extra focus noises (15).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -281,8 +291,6 @@ What is worth doing next, in the order it was raised:
   colour tweak, which is why the pass left this alone and wrote it down instead.
   The calendar's third step has the same fault for those accents (4.01:1 with
   Amber in the dark theme) and will be fixed by the same change.
-- **More focus noises** — waves, wind, fire — synthesised in the page like rain
-  and cafe, so nothing new has to be downloaded or licensed.
 - **Deeper history statistics**: weekly bars, averages and per-tag trends on top
   of the heatmap that is already there.
 - **The next slice of the task list**, in the order it is most likely to be
@@ -324,6 +332,13 @@ by accident:
   file, a licence to pick and a few hundred kilobytes in every copy, where the
   photo slot already takes any image the user owns and the CSS presets make the
   app look finished out of the box.
+- **Longer noise buffers.** The four-second loop is in every synthesised noise
+  and its periodicity is measurable (see the verification section), so lengthening
+  the buffers to a minute or two would clearly be an improvement. It is not done
+  here because it is a change to the three noises that were already shipped and
+  accepted, not to the three new ones, and because a minute of stereo-free float
+  per buffer is real memory for a noise nobody has complained about. Worth doing
+  as its own small commit if anyone ever does hear it.
 
 ## Gotchas that cost real time — read before editing
 
@@ -397,7 +412,18 @@ by accident:
    reduction, which is what a safety net should look like. The bundled recording
    is measured the same way — `decodeAudioData()` in the page gives its duration,
    RMS and a per-second envelope, which is how its level was checked and how the
-   two-second harp intro (and so the preview length) was found.
+   two-second harp intro (and so the preview length) was found. The three noises
+   added later were levelled identically, with the spec quoted from the shipped
+   file rather than retyped into the harness, and each rendered six times — the
+   noise buffers are randomised per render, so one run says less than six. The
+   method is self-checking: run against the three noises that were already
+   trimmed, it recovered their trims to within a few percent (rain 1.89 against a
+   stored 1.9, cafe 3.57 against 3.6), which says the harness is measuring what
+   the app plays and not an idealised version of it. Fire's crackles are measured
+   on their own, because a fifty-millisecond impulse is invisible in an average:
+   one peaks at 0.19 - 0.29 at the top of the spread each crackle draws its level
+   from - against the fire stack's 0.54, and even both peaks together stay under
+   the limiter's 0.89.
 
 10. **A melody is not a row of chimes.** The alert sounds decay across the whole
     note - a pluck. Right for a "ding", wrong for a tune: the Swan Lake theme
@@ -725,6 +751,38 @@ against that every line without a background of its own reads 5.11:1 or better a
 every dimming step, over a pure white photo and a pure black one, in both themes.
 The six accent swatches and the tag colours were measured too and are the one
 thing left broken — see the measurements in "Remaining work".
+
+The six noises were checked by ear *and* by counting. Each is rendered offline
+for its level (gotcha 9), but the three new ones needed a different check,
+because what is new about them is movement and events rather than a level: the
+graph is spied on instead. `AudioContext.prototype.createBufferSource` is wrapped
+to record when a buffer source is made, so picking Fire and waiting four seconds
+shows the two layer sources plus eight crackles arriving at the gaps the spec
+asks for, picking Off shows that count stop dead (the scheduler really is
+cancelled and not merely silenced), and picking a chip with nothing running shows
+the preview ending by itself — nothing stopped before 4 s for Rain and nothing
+stopped before 5 s for Waves, which is the 4 s and 9 s holds the specs ask for.
+Ten chips wrap into three rows in the drawer at 320 px with no horizontal
+overflow. One trap in that spy is worth repeating: `BaseAudioContext` and
+`AudioContext` both carry `createBufferSource`, so wrapping both wraps the
+wrapper, every source is counted twice, and Fire appears to crackle twice as
+fast as it does.
+
+The two moving noises were checked for the thing the comments claim. Rendering
+Waves offline and taking the RMS of each second of it gives peaks twelve seconds
+apart (at 3 s, 15 s and 27 s), with the loudest second 154% above the quietest —
+a swell you would hear as a swell, at the period the spec asks for. Wind's
+brightness, counted as zero crossings per second, moves from 64 to 610 within one
+pass and back, which is the whistle travelling over its octave rather than
+sitting still. Neither number comes from trusting the spec: they are what the
+rendered noise does.
+
+The same measurement shows the one inherited limit on the noises: the buffers are
+four seconds and loop, and the per-second loudness of the low-passed ones varies
+by up to a third within a single pass, so a four-second periodicity *is* in the
+signal. Nobody has reported hearing it, and the fix is the obvious one —
+lengthen the buffers — but that changes rain, brown and cafe as much as it
+changes the new three, so it is written down here rather than done in passing.
 
 Keep that bar. It has already paid for itself twice.
 

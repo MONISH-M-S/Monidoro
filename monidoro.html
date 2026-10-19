@@ -735,6 +735,9 @@
           <button type="button" data-ambient="rain">Rain</button>
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
+          <button type="button" data-ambient="waves">Waves</button>
+          <button type="button" data-ambient="wind">Wind</button>
+          <button type="button" data-ambient="fire">Fire</button>
           <button type="button" data-ambient="lofi">Lofi</button>
           <button type="button" data-ambient="swan">Swan Lake Vintage</button>
           <button type="button" data-ambient="swanArchive">Swan Lake European</button>
@@ -896,7 +899,8 @@
   // "swan" and "swanArchive" are two transfers of the same music, described
   // where their files are named further down.
   const AMBIENT_KEYS = [
-    "off", "rain", "deep", "cafe", "lofi", "mine", "swan", "swanArchive"
+    "off", "rain", "deep", "cafe", "waves", "wind", "fire",
+    "lofi", "mine", "swan", "swanArchive"
   ];
 
   // Backdrops are either a built-in CSS gradient - no file, so they work from
@@ -1830,14 +1834,19 @@
   /* ---------- focus noise ---------- */
 
   // Every noise is a couple of filtered layers of one of two precomputed noise
-  // buffers, so there is still nothing to download and nothing to decode.
+  // buffers, so there is still nothing to download and nothing to decode. A
+  // layer can also be swept while it plays, and Fire can also throw off single
+  // crackles; both are explained where their specs are.
   //
-  // `trim` equalises loudness across the three. A narrow band-pass throws away
+  // `trim` equalises loudness across the six. A narrow band-pass throws away
   // far more energy than a wide low-pass, so without it Cafe needed the slider
   // near the top to be heard next to Brown. The figures come from rendering
   // each noise offline and matching RMS, not from guessing by ear: at full
-  // volume all three now land at an RMS of about 0.10 with peaks near 0.4, so
-  // there is headroom and the limiter never has to intervene.
+  // volume all six land between an RMS of 0.095 and 0.103, with peaks between
+  // 0.44 and 0.63 - under the limiter's 0.89, so it never has to intervene.
+  // Fire's crackles are left out of that, because a crackle is a moment rather
+  // than texture and would pull the average around; they are measured on their
+  // own where they are described.
   const AMBIENT = {
     rain: {
       trim: 1.9,
@@ -1866,6 +1875,57 @@
         { noise: "brown", type: "bandpass", freq: 480, q: 0.8, level: 0.8 },
         { noise: "white", type: "bandpass", freq: 1600, q: 0.5, level: 0.14 }
       ]
+    },
+    // Waves are Rain with the surf moving under it: the band of hiss rises and
+    // falls while the swell carried by the tremolo comes in and goes out, over
+    // the rumble of the water behind it. The band's rate deliberately does not
+    // divide into the swell's rate - 0.061 against 0.083 - so the two drift out
+    // of step and the loop never lands back where it started, which is the one
+    // thing that makes a loop audible.
+    waves: {
+      trim: 2.38,
+      preview: 9000,
+      lfo: { rate: 0.083, depth: 0.40 },
+      layers: [
+        { noise: "white", type: "bandpass", freq: 1400, q: 0.5, level: 0.50,
+          lfo: { rate: 0.061, hz: 900 } },
+        { noise: "brown", type: "lowpass", freq: 420, q: 0.6, level: 0.55 }
+      ]
+    },
+    // Wind is a whistle rather than a hiss, and the whistle is entirely in the
+    // narrowness of the band - widen it and this is Rain again. It wanders over
+    // most of an octave, again at a rate that does not divide into the swell's.
+    wind: {
+      trim: 1.82,
+      preview: 10000,
+      lfo: { rate: 0.047, depth: 0.35 },
+      layers: [
+        { noise: "white", type: "bandpass", freq: 800, q: 5, level: 0.55,
+          lfo: { rate: 0.073, hz: 380 } },
+        { noise: "brown", type: "lowpass", freq: 260, q: 0.6, level: 0.80 }
+      ]
+    },
+    // Fire is the only noise here whose character is not a texture: under the
+    // roar and the hiss of the flames there are crackles, and a crackle is a
+    // moment. They are scheduled one at a time with a random gap between them
+    // (startCrackles) instead of being baked into a buffer, because a buffer
+    // would repeat its pattern of pops every four seconds and say so.
+    //
+    // The level looks high next to the layers, but a crackle is a band-passed
+    // impulse rather than a continuous signal, so most of it is thrown away:
+    // rendered on its own a crackle peaks at 0.19, or 0.29 at the top of the
+    // spread its level is drawn from, against the fire stack's 0.54 - so a
+    // crackle is heard over the roar, and even the two peaks together only reach
+    // 0.83, under the limiter's 0.89.
+    fire: {
+      trim: 2.31,
+      preview: 8000,
+      lfo: { rate: 0.11, depth: 0.20 },
+      layers: [
+        { noise: "brown", type: "lowpass", freq: 380, q: 0.6, level: 0.60 },
+        { noise: "white", type: "highpass", freq: 2400, q: 0.5, level: 0.16 }
+      ],
+      crackle: { gap: [0.07, 0.9], freq: 2400, q: 0.9, level: 1.0, decay: 0.05 }
     }
   };
 
@@ -2037,6 +2097,15 @@
     // a stopped sound would schedule the next statement back into life.
     if (playing.melodyId !== undefined && playing.melodyId !== null) {
       clearTimeout(playing.melodyId);
+    }
+    // Fire's crackles are scheduled the same way, and the ones already sounding
+    // are stopped below along with everything else.
+    if (playing.crackles) {
+      playing.crackles.stopped = true;
+      if (playing.crackles.id !== null) clearTimeout(playing.crackles.id);
+      playing.crackles.live.forEach(function (node) {
+        try { node.stop(); } catch (err) { /* already stopped */ }
+      });
     }
     playing.sources.forEach(function (node) {
       try { node.stop(); } catch (err) { /* already stopped */ }
@@ -2313,6 +2382,66 @@
     startRecording(ownOrder[ownIndex], ownOrder.length === 1);
   }
 
+  // One crackle: a few milliseconds of the white buffer through a band-pass,
+  // with a decay envelope so it pops instead of clicking. It starts at a random
+  // point in the buffer, which is what stops a hundred crackles from being the
+  // same crackle - the source is four seconds long and only a fiftieth of a
+  // second of it is ever heard. Its level is drawn too, because a fire is not a
+  // drum machine: most pops are small ticks and a few are sharp snaps.
+  function playCrackle(spec, target) {
+    const source = audioCtx.createBufferSource();
+    source.buffer = noiseBuffers().white;
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = spec.freq;
+    filter.Q.value = spec.q;
+
+    const envelope = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    // An exponential ramp cannot start or end at zero, hence the small value at
+    // the end rather than nothing; it is 80 dB down and inaudible.
+    envelope.gain.setValueAtTime(spec.level * (0.4 + Math.random() * 1.1), now);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + spec.decay);
+
+    source.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(target);
+    source.start(now, Math.random() * 3, spec.decay + 0.02);
+    return source;
+  }
+
+  // Crackles are events, so they are scheduled one at a time rather than baked
+  // into a loop: fire the next one after a random gap, so the pops arrive like a
+  // fire's instead of like a metronome's. This scheduler is the one thing in the
+  // noise graph that is not an audio node, so it has to be able to be switched
+  // off - `stopped` is set by stopAmbientNodes, which is also where the pending
+  // timeout is cleared, or a stopped sound would schedule itself back to life.
+  function startCrackles(spec, target) {
+    const crackles = { id: null, live: [], stopped: false };
+
+    function arm() {
+      const gap = spec.gap[0] + Math.random() * (spec.gap[1] - spec.gap[0]);
+      crackles.id = setTimeout(function () {
+        crackles.id = null;
+        if (crackles.stopped) return;
+        const source = playCrackle(spec, target);
+        crackles.live.push(source);
+        // A crackle is over in fifty milliseconds; holding onto every source of
+        // a half-hour session would be a slow leak, so each one lets go of
+        // itself as it ends.
+        source.onended = function () {
+          const i = crackles.live.indexOf(source);
+          if (i >= 0) crackles.live.splice(i, 1);
+        };
+        arm();
+      }, gap * 1000);
+    }
+
+    arm();
+    return crackles;
+  }
+
   function startAmbientNodes() {
     if (ambientNodes) return;
     if (isRecording(settings.ambient)) {
@@ -2370,6 +2499,23 @@
         source.connect(filter);
         filter.connect(level);
         level.connect(tremolo);
+
+        // A layer that moves: a still filter can only make a texture, and the
+        // surf band and the wind's whistle are the two noises here whose
+        // character is the movement itself. The oscillator's rate is in Hz and
+        // its swing is in Hz of filter cut-off, so `freq` is the centre of the
+        // sweep rather than the cut-off.
+        if (layer.lfo) {
+          const sweep = audioCtx.createOscillator();
+          sweep.frequency.value = layer.lfo.rate;
+          const swing = audioCtx.createGain();
+          swing.gain.value = layer.lfo.hz;
+          sweep.connect(swing);
+          swing.connect(filter.frequency);
+          sweep.start();
+          sources.push(sweep);
+        }
+
         source.start();
         sources.push(source);
       });
@@ -2389,7 +2535,8 @@
         sources: sources,
         master: master,
         limiter: limiter,
-        trim: spec.trim || 1
+        trim: spec.trim || 1,
+        crackles: spec.crackle ? startCrackles(spec.crackle, master) : null
       };
     } catch (err) {
       ambientNodes = null;
@@ -2503,7 +2650,13 @@
     // A noise makes its character known in a moment; the Scene opens with a harp
     // arpeggio and only reaches the tune a few bars in, so it gets longer to
     // prove itself. Music in general is judged over bars rather than seconds.
-    const hold = isRecording(settings.ambient) ? 9000 : 4000;
+    // The three slow noises ask for more than a moment for the opposite reason:
+    // Waves comes in and goes out again over about twelve seconds, so four
+    // seconds of it would be a flat hiss and the swell, which is the whole
+    // point of it, would never arrive.
+    const hold = isRecording(settings.ambient)
+      ? 9000
+      : ((AMBIENT[settings.ambient] || {}).preview || 4000);
     ambientStopId = setTimeout(function () {
       ambientStopId = null;
       if (!ambientWanted()) stopAmbientNodes();
