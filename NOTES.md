@@ -59,9 +59,12 @@ and pushed.
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
 - Theme: system / light / dark, plus an accent colour picker
-- Background: six built-in backdrops (plain, dunes, aurora, forest, grid,
-  stars) drawn as CSS gradients out of the theme's own colours, so one
-  definition follows light/dark and the accent; plus a photo of the user's own.
+- Background: five built-in backdrops (plain, dunes, aurora, grid, space) drawn
+  as CSS gradients out of the theme's own colours, so one definition follows
+  light/dark and the accent; plus a photo of the user's own. Forest and Stars
+  were dropped after living with them: the green wash read as a smudge on the
+  screen, and the tiled dot pattern read as graph paper rather than as a sky.
+  Space replaced Stars and a stored `"stars"` maps forward to it.
   A picked image is shrunk to fit, kept in this browser only, and sits under a
   scrim whose strength is adjustable, so the timer stays readable over any
   picture. Pure CSS and canvas means no files and nothing downloaded
@@ -79,11 +82,14 @@ and pushed.
   choice is never silent. Plays only while a focus session runs
 - Music of your own as a focus sound: files kept beside the page are shuffled
   when the session starts and played one after another, and a single file picked
-  by hand plays for that visit. Nothing is uploaded and nothing is stored: a
-  browser cannot remember a file it was handed, so music that survives a reload
-  is music with a name the app can look up again. The chip opens the picker by
-  itself when there is nothing to play, and with no file at all the choice falls
-  back to the synthesised melody rather than to silence
+  by hand plays for that visit. It is chosen from its own section in Customize
+  rather than from the row of sounds, because two of that row's choices are
+  already music and a chip labelled twice over was just confusing. Nothing is
+  uploaded and nothing is stored: a browser cannot remember a file it was handed,
+  so music that survives a reload is music with a name the app can look up again.
+  The section's own button opens the picker when there is nothing to play, and
+  with no file at all the choice falls back to the synthesised melody rather than
+  to silence
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -285,7 +291,9 @@ by accident:
    was renamed, its key went from `swanLong` to `swanArchive` and
    `sanitizeSettings()` maps the old name forward, because an unmatched value
    falls back to the default (`off`) — indistinguishable from the setting
-   erasing itself.
+   erasing itself. Removing a choice is the same problem, which is why a stored
+   `"stars"` still selects Space; a removal with no successor (`"forest"`) is
+   allowed to fall back, but that has to be a decision rather than an oversight.
 
 9. **Audio can be measured, so measure it.** Every noise and tone is verified by
    building the real graph on an `OfflineAudioContext`, rendering it, and
@@ -463,6 +471,18 @@ by accident:
     instead of throwing. Nothing needs fixing — but it does mean the alert sound
     is the only signal in the app's real home, and that a GitHub Pages deployment
     would behave differently, because that is a real origin and would prompt.
+
+24. **A backdrop is a background, not a picture: it must stay out of the way of
+    the text.** Two of the presets were dropped after living with them. A wash of
+    one colour (Forest) reads as a smudge rather than as scenery, and a tiled dot
+    pattern (`radial-gradient` on a 46 px grid, "Stars") reads as graph paper,
+    because the eye locks onto the repeat. Space replaces it by placing each star
+    as its own tiny radial gradient at its own position — no tile, no repeat, so
+    no pattern to notice — over two nebula washes and a base gradient. Every
+    colour still comes from the theme (`--bg`, `--card`, `--ink`, `--mut`), which
+    is what makes one definition work in both light and dark: a hardcoded night
+    sky would leave dark text on a dark background the moment the theme flipped.
+    Any new preset has to survive that double check before it ships.
 
 ## How features were verified
 

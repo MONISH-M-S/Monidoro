@@ -252,19 +252,36 @@
       radial-gradient(65% 55% at 88% 16%, rgba(111,179,217,.26), transparent 70%),
       radial-gradient(85% 60% at 50% 112%, rgba(169,155,224,.28), transparent 70%);
   }
-  [data-backdrop="forest"]{
+  /* Space is a scatter of stars rather than a tiled dot pattern, which is what
+     went wrong with the old "stars": a repeating grid of dots reads as graph
+     paper, not as a sky. Each star here is its own tiny radial gradient at a
+     fixed position, over two washes of nebula colour, and every colour comes
+     from the theme - so the dark theme gets a night sky and the light one gets
+     dusk, where the stars are dark specks instead. */
+  [data-backdrop="space"]{
     --backdrop-image:
-      radial-gradient(110% 80% at 50% 118%, rgba(63,125,78,.40), transparent 68%),
-      radial-gradient(70% 50% at 12% 8%, rgba(63,125,78,.16), transparent 70%);
+      radial-gradient(circle 1.7px at 11% 17%, var(--ink), transparent),
+      radial-gradient(circle 1.2px at 24% 63%, var(--mut), transparent),
+      radial-gradient(circle 1px at 38% 29%, var(--mut), transparent),
+      radial-gradient(circle 1.9px at 54% 79%, var(--ink), transparent),
+      radial-gradient(circle 1.3px at 66% 21%, var(--mut), transparent),
+      radial-gradient(circle 1.5px at 78% 57%, var(--ink), transparent),
+      radial-gradient(circle 1px at 87% 11%, var(--mut), transparent),
+      radial-gradient(circle 1.4px at 93% 86%, var(--mut), transparent),
+      radial-gradient(circle 1.2px at 6% 87%, var(--mut), transparent),
+      radial-gradient(circle 1.6px at 31% 94%, var(--ink), transparent),
+      radial-gradient(circle 1.3px at 62% 43%, var(--mut), transparent),
+      radial-gradient(circle 1px at 17% 42%, var(--mut), transparent),
+      radial-gradient(circle 1.1px at 71% 91%, var(--mut), transparent),
+      radial-gradient(circle 1.2px at 45% 8%, var(--ink), transparent),
+      radial-gradient(75% 60% at 78% 4%, rgba(120,124,230,.26), transparent 66%),
+      radial-gradient(85% 65% at 12% 98%, rgba(196,116,186,.20), transparent 68%),
+      linear-gradient(180deg, var(--bg), var(--card));
   }
   [data-backdrop="grid"]{
     --backdrop-image:
       repeating-linear-gradient(0deg, var(--line) 0 1px, transparent 1px 30px),
       repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 30px);
-  }
-  [data-backdrop="stars"]{
-    --backdrop-image: radial-gradient(var(--mut) .9px, transparent 1.1px);
-    --backdrop-size: 46px 46px;
   }
   body[data-backdrop]{
     background-size: var(--backdrop-size, cover);
@@ -276,10 +293,10 @@
 
   /* The tiles in Customize show the backdrop they choose, from the same
      --backdrop-image definition, so a preset cannot drift from its preview. */
-  /* One row of seven equal tiles rather than a wrapping flex row: wrapped
+  /* One row of six equal tiles rather than a wrapping flex row: wrapped
      rows would stretch to fill and make the tiles different sizes. */
   #backdropRow{
-    display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:6px;
+    display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:6px;
   }
   /* `.btn-row` is needed to outrank the row's own button rules, exactly like
      the accent swatches above: otherwise the selected tile would paint itself
@@ -525,9 +542,8 @@
           <button type="button" class="backdrop-tile" data-backdrop="plain"><span class="tile-preview"></span>Plain</button>
           <button type="button" class="backdrop-tile" data-backdrop="dunes"><span class="tile-preview"></span>Dunes</button>
           <button type="button" class="backdrop-tile" data-backdrop="aurora"><span class="tile-preview"></span>Aurora</button>
-          <button type="button" class="backdrop-tile" data-backdrop="forest"><span class="tile-preview"></span>Forest</button>
           <button type="button" class="backdrop-tile" data-backdrop="grid"><span class="tile-preview"></span>Grid</button>
-          <button type="button" class="backdrop-tile" data-backdrop="stars"><span class="tile-preview"></span>Stars</button>
+          <button type="button" class="backdrop-tile" data-backdrop="space"><span class="tile-preview"></span>Space</button>
           <button type="button" class="backdrop-tile" data-backdrop="photo" id="photoTile"><span class="tile-preview" id="photoPreview">+</span>Photo</button>
         </div>
         <div class="btn-row" id="photoRow">
@@ -565,7 +581,6 @@
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
           <button type="button" data-ambient="lofi">Lofi</button>
-          <button type="button" data-ambient="mine">Your music</button>
           <button type="button" data-ambient="swan">Swan Lake Vintage</button>
           <button type="button" data-ambient="swanArchive">Swan Lake European</button>
         </div>
@@ -575,15 +590,18 @@
       <div class="field">
         <span class="field-label">Your own music</span>
         <div class="btn-row">
+          <button type="button" id="ownMusicUse" aria-pressed="false">Use your music</button>
           <button type="button" id="ownMusicBtn">Play a file</button>
-          <button type="button" id="ownMusicClear" hidden>Stop using it</button>
+          <button type="button" id="ownMusicClear" hidden>Forget the picked file</button>
         </div>
         <input type="file" id="ownMusicFile" accept="audio/*" hidden>
+        <p class="hint" id="ownMusicStatus" hidden></p>
         <p class="hint" id="ownMusicHint">
-          Your music is looked for beside this file, never uploaded:
-          focus-music.ogg, or focus-music-1.ogg and consecutive numbers after it
-          for a playlist (.mp3, .m4a and .wav work too). A file you pick plays
-          for this visit only, because a browser cannot remember a file you chose.
+          Takes the place of the sound above while you focus. Your music is
+          looked for beside this file, never uploaded: focus-music-1.ogg, then
+          focus-music-2.ogg and on for a playlist (.mp3, .m4a and .wav work
+          too). A file you pick plays for this visit only, because a browser
+          cannot remember a file you chose.
         </p>
       </div>
 
@@ -707,7 +725,7 @@
   // file:// and cost nothing - or a photo of the user's own, which is shrunk
   // and kept as a data URL in its own key. "photo" is the choice that shows it.
   const BACKDROP_KEYS = [
-    "plain", "dunes", "aurora", "forest", "grid", "stars", "photo"
+    "plain", "dunes", "aurora", "grid", "space", "photo"
   ];
   const STORE_PHOTO = "monidoro.photo";
   // localStorage holds roughly 5 MB for the whole origin and a data URL is a
@@ -1026,8 +1044,15 @@
     // "photo" only means something while there is a photo: an export cannot
     // carry the image, so a settings file restored in a new browser has to fall
     // back to a preset rather than paint nothing at all.
-    let backdrop = BACKDROP_KEYS.indexOf(source.backdrop) >= 0
-      ? source.backdrop
+    //
+    // "stars" is mapped forward to "space", its replacement: an unmatched value
+    // would fall back to Plain, and someone who chose a night sky would read
+    // that as the setting erasing itself. "forest" has no successor and does
+    // fall back, deliberately.
+    const storedBackdrop =
+      source.backdrop === "stars" ? "space" : source.backdrop;
+    let backdrop = BACKDROP_KEYS.indexOf(storedBackdrop) >= 0
+      ? storedBackdrop
       : DEFAULTS.backdrop;
     if (backdrop === "photo" && !readStored(STORE_PHOTO)) backdrop = "plain";
 
@@ -1226,9 +1251,11 @@
     photoFile: document.getElementById("photoFile"),
     photoHint: document.getElementById("photoHint"),
     ownMusicBtn: document.getElementById("ownMusicBtn"),
+    ownMusicUse: document.getElementById("ownMusicUse"),
     ownMusicClear: document.getElementById("ownMusicClear"),
     ownMusicFile: document.getElementById("ownMusicFile"),
     ownMusicHint: document.getElementById("ownMusicHint"),
+    ownMusicStatus: document.getElementById("ownMusicStatus"),
     tagRow: document.getElementById("tagRow"),
     tagList: document.getElementById("tagList"),
     addTagBtn: document.getElementById("addTagBtn"),
@@ -2525,31 +2552,46 @@
         "aria-pressed", String(btn.dataset.ambient === settings.ambient)
       );
     });
+    // The user's own music is chosen from its own section, not from the row, so
+    // the row can legitimately have no chip pressed at all. The section carries
+    // the one state that matters.
+    el.ownMusicUse.setAttribute(
+      "aria-pressed", String(settings.ambient === OWN_KEY)
+    );
     el.ambientVolume.value = settings.ambientVolume;
-    // Nothing to turn down when no noise is chosen.
+    // Nothing to turn down when no sound is chosen.
     el.ambientVolume.disabled = settings.ambient === "off";
   }
 
+  // Choosing a sound - from the row of chips or from the music section's own
+  // button - does the same three things either way: remember it, tear down
+  // whatever was playing so that switching mid-session really switches, and
+  // start or preview the new one.
+  function chooseAmbient(key) {
+    settings.ambient = key;
+    saveSettings();
+    ensureAudio();
+    renderAmbientChoice();
+
+    // With nothing to play, the music section opens the picker - the same
+    // courtesy the empty Photo tile pays. The choice stays chosen if the picker
+    // is dismissed, and the synthesised melody covers for it rather than
+    // leaving silence.
+    if (key === OWN_KEY && !ownPickedSrc) {
+      ensureOwnMusic(function (found) {
+        if (!found.length && settings.ambient === OWN_KEY) el.ownMusicFile.click();
+      });
+    }
+
+    stopAmbientNodes();
+    if (running) syncAmbient(); else previewAmbient();
+  }
+
   ambientButtons.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      settings.ambient = btn.dataset.ambient;
-      saveSettings();
-      ensureAudio();
-      renderAmbientChoice();
-      // With nothing to play, "Your music" opens the picker - the same courtesy
-      // the empty Photo tile pays. It stays chosen if the picker is dismissed,
-      // and the melody covers for it rather than silence.
-      if (btn.dataset.ambient === OWN_KEY && !ownPickedSrc) {
-        ensureOwnMusic(function (found) {
-          if (!found.length && settings.ambient === OWN_KEY) el.ownMusicFile.click();
-        });
-      }
-      // Tear down whatever was playing first: switching mid-session has to
-      // change the sound, not keep the old one running under the new label.
-      stopAmbientNodes();
-      if (running) syncAmbient(); else previewAmbient();
-    });
+    btn.addEventListener("click", function () { chooseAmbient(btn.dataset.ambient); });
   });
+
+  el.ownMusicUse.addEventListener("click", function () { chooseAmbient(OWN_KEY); });
 
   el.ambientVolume.addEventListener("input", function () {
     settings.ambientVolume = clampInt(
@@ -3009,14 +3051,13 @@
 
   /* ---------- your own music ---------- */
 
-  const OWN_MUSIC_HINT = el.ownMusicHint.textContent.trim().replace(/\s+/g, " ");
-
-  // The same shape as the photo hint: the paragraph carries the explanation, and
-  // a status line stands in for it until the next state change says otherwise.
+  // The explanation above stays put; this line reports what is happening, so the
+  // naming rules do not disappear the moment there is something to report.
   function ownMusicStatus(message, state) {
-    el.ownMusicHint.textContent = message || OWN_MUSIC_HINT;
-    if (state) el.ownMusicHint.setAttribute("data-state", state);
-    else el.ownMusicHint.removeAttribute("data-state");
+    el.ownMusicStatus.hidden = !message;
+    el.ownMusicStatus.textContent = message || "";
+    if (state) el.ownMusicStatus.setAttribute("data-state", state);
+    else el.ownMusicStatus.removeAttribute("data-state");
   }
 
   function renderOwnMusic() {
@@ -3033,7 +3074,7 @@
     ownMusicStatus(found
       ? "Found " + found + (found === 1 ? " track" : " tracks") +
         ", played shuffled while you focus."
-      : "");
+      : "No music of your own found here yet.");
   }
 
   el.ownMusicBtn.addEventListener("click", function () {
@@ -3066,13 +3107,10 @@
     ownPickedSrc = URL.createObjectURL(file);
     // A song title can be long and the status line is one line.
     ownPickedName = file.name.slice(0, 48);
-    settings.ambient = OWN_KEY;
-    saveSettings();
-    renderAmbientChoice();
     renderOwnMusic();
-    // Play it now: choosing a track is not the moment to wait for a session.
-    stopAmbientNodes();
-    if (running) syncAmbient(); else previewAmbient();
+    // Picking a file is choosing it, and playing it now rather than waiting for
+    // the next session is the whole point of picking it.
+    chooseAmbient(OWN_KEY);
   });
 
   /* ---------- presets ---------- */
