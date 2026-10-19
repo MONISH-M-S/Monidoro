@@ -70,6 +70,16 @@ and pushed.
   over"), asked for on the first start rather than at load. It is a bonus and
   never a promise: on `file://` the origin is opaque and the prompt may never
   appear, so every call is guarded and the alert sound is the real signal
+- A plant grows inside the progress ring while a focus session runs: a stem
+  first, then one leaf, the other, a bud, and the flower on the last stretch.
+  Finishing leaves it in flower through the break - that flower *is* the reward
+  for the finished session - and Reset part-way through wilts it, so the plant
+  only ever stands for work that was done. Growth is read straight off the
+  countdown and the whole curve is CSS: JavaScript sets one custom property
+  (`--grow`) and nothing else
+- Confetti falls for a finished focus session: DOM nodes animated by one CSS
+  keyframe, and one timer takes them away. Nothing falls if the system asks for
+  reduced motion, where the flower opening is the celebration on its own
 
 ## Storage keys (localStorage)
 
@@ -130,21 +140,20 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-### 7. Keyboard shortcuts + notification
+Nothing is queued. The two features that were planned here are done and
+described above: keyboard shortcuts with a completion notification (7), and the
+plant with confetti (8).
 
-- `Space` = start / pause, `R` = reset.
-- A desktop notification when time is up.
-- **Test the Notification API on `file://` before promising it works.** A file
-  page has an opaque origin and the permission prompt may not appear at all.
-  It is expected to work fine on GitHub Pages, if that ever happens.
-- Note the existing `keydown` listener that closes whichever overlay is open on
-  `Escape`; shortcuts must not fire while a text field has focus, or typing a
-  name would start and stop the timer.
+Ideas raised along the way and deliberately not pursued, so nobody re-opens them
+by accident:
 
-### 8. Confetti + tree
-
-A CSS-only celebration on completion, and a Forest-style tree that grows while
-focusing and dies if you bail early.
+- **Publishing to GitHub Pages.** The notification prompt would start appearing
+  there, since it is a real origin rather than `file://`.
+- **A record of dead plants.** Wilting leaves no trace anywhere: it is feedback
+  for the moment, not a history of failure, and the day records stay about time
+  spent.
+- **A third Swan Lake transfer.** Checked and rejected (see the credits) — no
+  modern freely licensed recording of the Scene exists to offer.
 
 ## Gotchas that cost real time — read before editing
 
@@ -304,6 +313,18 @@ focusing and dies if you bail early.
     because a browser that stays at "default" was dismissed, and asking every
     session is nagging. The alert sound is the real signal; the notification is
     on top of it.
+
+17. **Two ways a working feature can look broken, both of which happened to the
+    plant.** (a) `.dial svg` — the rule that sizes and tips the progress ring —
+    also matched the plant SVG added inside the dial much later, so the plant
+    arrived 260px across and rotated onto its side. A descendant selector
+    quietly claims anything of that type added afterwards; the plant now carries
+    its own `.dial .plant` rule that outranks it. (b) Reading
+    `getComputedStyle(node).transform` or `getBoundingClientRect()` immediately
+    after setting the value returns the *previous* value, because a CSS
+    `transition` has not started yet: a perfectly good growth curve measures as
+    `matrix(0,0,0,0,0,0)` and looks dead. Suspend the transitions, or wait, and
+    only then believe a measurement.
 
 ## How features were verified
 

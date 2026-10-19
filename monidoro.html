@@ -9,6 +9,7 @@
     --bg:#f4f1ea; --card:#fffdf7; --ink:#1c1a15; --mut:#6e6858;
     --line:#dcd4c0; --accent:#3f7d4e; --break:#2f6f95; --longbreak:#5b4fa8;
     --warn:#b8860b; --cal-accent:#3f7d4e;
+    --plant:#3f7d4e; --plant-dead:#9a8b6a; --bloom:#c76a90;
     color-scheme:light;
   }
   /* The :not() lets an explicit "light" choice beat a dark OS setting. The
@@ -20,6 +21,7 @@
       --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
       --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
       --warn:#e0b04a; --cal-accent:#6dbb7f;
+      --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
       color-scheme:dark;
     }
   }
@@ -28,6 +30,7 @@
     --bg:#141310; --card:#1e1c16; --ink:#f0e9d6; --mut:#a49c86;
     --line:#3a3527; --accent:#6dbb7f; --break:#6fb3d9; --longbreak:#a99be0;
     --warn:#e0b04a; --cal-accent:#6dbb7f;
+    --plant:#6dbb7f; --plant-dead:#7f7660; --bloom:#e28aae;
     color-scheme:dark;
   }
   /* Deliberately NO transition on anything whose value comes from a custom
@@ -74,6 +77,69 @@
     background:transparent;
   }
   .cycle-dot.done{background:var(--accent)}
+
+  /* The plant inside the dial. A focus session grows it, finishing flowers it,
+     and abandoning the session wilts it. It is one inline SVG and the whole
+     growth curve is CSS: JavaScript only ever sets --grow from 0 to 1, so the
+     curve can be retuned here without touching the timer. The plant has its own
+     greens rather than var(--accent) because --accent turns blue and purple on
+     breaks, and a blue plant would misrepresent what grew. */
+  .dial .plant{
+    position:absolute; left:50%; bottom:10px; width:62px; height:64px;
+    transform:translateX(-50%); transform-origin:50% 100%;
+    transition:transform .5s ease, opacity .5s ease; pointer-events:none;
+  }
+  .plant path, .plant g{
+    transition:fill .45s ease, stroke .45s ease, transform .35s ease;
+  }
+  .plant .stem{
+    fill:none; stroke:var(--plant); stroke-width:3; stroke-linecap:round;
+    stroke-dasharray:100;
+    stroke-dashoffset:calc((1 - var(--grow, 0)) * 100);
+  }
+  .plant .leaf{
+    fill:var(--plant); transform-box:fill-box; transform-origin:50% 100%;
+    transform:scale(clamp(0, calc((var(--grow, 0) - .2) * 5), 1));
+  }
+  .plant .leaf-a{transform-origin:100% 100%}
+  .plant .leaf-b{
+    transform-origin:0% 100%;
+    transform:scale(clamp(0, calc((var(--grow, 0) - .42) * 5), 1));
+  }
+  .plant .bud{
+    fill:var(--plant); transform-box:fill-box; transform-origin:50% 100%;
+    transform:scale(clamp(0, calc((var(--grow, 0) - .7) * 4), 1));
+  }
+  .plant .flower{
+    fill:var(--bloom); transform-box:fill-box; transform-origin:50% 100%;
+    transform:scale(clamp(0, calc((var(--grow, 0) - .88) * 9), 1));
+  }
+  /* Wilting is the whole plant tipping over and drying out where it stands; the
+     growth curve then takes it away, because a reset session has grown nothing. */
+  .plant.is-wilting{transform:translateX(-50%) rotate(14deg) scale(.9); opacity:.3}
+  .plant.is-wilting .stem{stroke:var(--plant-dead)}
+  .plant.is-wilting .leaf,
+  .plant.is-wilting .bud,
+  .plant.is-wilting .flower{fill:var(--plant-dead)}
+
+  /* Confetti for a finished session. JavaScript builds the pieces and takes them
+     away again; every piece only animates, driven by the variables set on it. */
+  .celebrate{position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:5}
+  .confetti{
+    position:absolute; top:-5vh; left:var(--x); width:8px; height:12px;
+    border-radius:var(--r, 2px); background:var(--col, var(--plant));
+    animation:confetti-fall var(--dur) ease-in var(--delay) forwards;
+  }
+  @keyframes confetti-fall{
+    from{transform:translate3d(0,0,0) rotate(0deg); opacity:1}
+    to{transform:translate3d(var(--drift, 0), 112vh, 0) rotate(var(--spin, 360deg)); opacity:.85}
+  }
+  /* Nothing falls if motion is unwelcome; the flower opening is the celebration
+     on its own, and it is driven by the timer rather than by an animation. */
+  @media (prefers-reduced-motion:reduce){
+    .confetti{display:none}
+  }
+
   .controls{display:flex; gap:10px; justify-content:center}
   button{
     font:inherit; font-weight:600; cursor:pointer; min-width:114px; padding:12px 20px;
@@ -285,6 +351,22 @@
       <div id="mode">Focus</div>
       <div class="cycles" id="cycles" role="img" aria-label=""></div>
     </div>
+    <svg class="plant" id="plant" viewBox="0 0 60 56" aria-hidden="true" focusable="false">
+      <path class="stem" pathLength="100" d="M30 56 C30 45 29 30 30 15"></path>
+      <path class="leaf leaf-a" d="M30 43 C17 42 6 33 5 21 C19 21 29 31 30 43 Z"></path>
+      <path class="leaf leaf-b" d="M30 33 C43 32 54 24 55 12 C41 12 31 21 30 33 Z"></path>
+      <g class="bud">
+        <path d="M30 16 C25 15 23 11 23 7 C28 7 30 11 30 16 Z"></path>
+        <path d="M30 16 C35 15 37 11 37 7 C32 7 30 11 30 16 Z"></path>
+      </g>
+      <g class="flower">
+        <circle cx="30" cy="9" r="4.4"></circle>
+        <circle cx="23.6" cy="13.4" r="3.9"></circle>
+        <circle cx="36.4" cy="13.4" r="3.9"></circle>
+        <circle cx="25.6" cy="4.6" r="3.4"></circle>
+        <circle cx="34.4" cy="4.6" r="3.4"></circle>
+      </g>
+    </svg>
   </div>
 
   <div class="controls">
@@ -481,6 +563,8 @@
     <p class="hint" id="calSummary"></p>
   </div>
 </div>
+
+<div class="celebrate" id="celebrate" aria-hidden="true"></div>
 
 <script>
   /* ---------- configuration ---------- */
@@ -945,6 +1029,8 @@
     mode: document.getElementById("mode"),
     ring: document.getElementById("ring"),
     cycles: document.getElementById("cycles"),
+    plant: document.getElementById("plant"),
+    celebrate: document.getElementById("celebrate"),
     go: document.getElementById("go"),
     reset: document.getElementById("reset"),
     skip: document.getElementById("skip"),
@@ -1030,6 +1116,7 @@
     document.title = (running ? text + " - " : "") + "Monidoro";
     el.skip.hidden = mode === "focus";
     renderCycles();
+    renderPlant();
   }
 
   function renderGreeting() {
@@ -1753,6 +1840,79 @@
     if (left === 0) finish();
   }
 
+  /* ---------- the plant, and the confetti ---------- */
+
+  // The plant in the dial is the progress bar that is worth looking at: it grows
+  // with the focus session, flowers when the session is finished, and wilts if
+  // the session is abandoned. Growth comes straight from the countdown, so a
+  // paused session holds a paused plant and a resumed one carries on growing.
+  const WILT_MS = 1000;
+  let wiltTimer = null;
+
+  function setPlantGrow(grow) {
+    el.plant.style.setProperty("--grow", String(Math.max(0, Math.min(1, grow))));
+  }
+
+  function renderPlant() {
+    // A wilt owns the plant until it has finished dying.
+    if (wiltTimer) return;
+    // A break shows what the focus session before it grew - that is the point of
+    // finishing one - and the next focus session starts from a bare stem again.
+    setPlantGrow(mode === "focus" && total > 0 ? (total - left) / total : 1);
+  }
+
+  function wiltPlant() {
+    clearTimeout(wiltTimer);
+    el.plant.classList.add("is-wilting");
+    wiltTimer = setTimeout(function () {
+      wiltTimer = null;
+      el.plant.classList.remove("is-wilting");
+      renderPlant();
+    }, WILT_MS);
+  }
+
+  // Starting a session again brings the plant back to life: a wilt that is still
+  // running belongs to the session that was just abandoned.
+  function revivePlant() {
+    if (!wiltTimer) return;
+    clearTimeout(wiltTimer);
+    wiltTimer = null;
+    el.plant.classList.remove("is-wilting");
+  }
+
+  // Confetti is DOM nodes and one CSS keyframe; JavaScript makes them, and the
+  // same timer takes them away whether or not the animation finished. Pieces are
+  // rectangles, squares and circles so the fall does not look like a barcode.
+  const CONFETTI_PIECES = 44;
+  const CONFETTI_COLOURS = ["#e8b64c", "#6dbb7f", "#6fb3d9", "#d98aa6", "#b9a1e6"];
+  let confettiTimer = null;
+
+  function celebrate() {
+    // The flower is the celebration when motion is unwelcome, so nothing falls.
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    el.celebrate.textContent = "";
+    for (let i = 0; i < CONFETTI_PIECES; i += 1) {
+      const piece = document.createElement("span");
+      piece.className = "confetti";
+      piece.style.setProperty("--x", (Math.random() * 100).toFixed(2) + "%");
+      piece.style.setProperty("--drift", Math.round(Math.random() * 170 - 85) + "px");
+      piece.style.setProperty("--spin", Math.round(Math.random() * 1080 - 540) + "deg");
+      piece.style.setProperty("--dur", (1.7 + Math.random() * 1.2).toFixed(2) + "s");
+      piece.style.setProperty("--delay", (Math.random() * .6).toFixed(2) + "s");
+      piece.style.setProperty("--col", CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]);
+      if (i % 4 === 0) piece.style.setProperty("--r", "50%");
+      else if (i % 4 === 1) piece.style.setProperty("--r", "0");
+      el.celebrate.appendChild(piece);
+    }
+    clearTimeout(confettiTimer);
+    // Longest fall is 2.9s, longest delay .6s; a little past that is empty air.
+    confettiTimer = setTimeout(function () {
+      el.celebrate.textContent = "";
+    }, 3700);
+  }
+
   /* ---------- desktop notification ---------- */
 
   // The notification is a bonus and never a promise: this page is often opened
@@ -1802,6 +1962,7 @@
       store.set(STORE_COMPLETED, String(completed));
       recordFocusSession(settings.focusSec);
       renderStats();
+      celebrate();
 
       // The Pomodoro rule: every Nth break is a long one. Without this the
       // rest is always five minutes and the technique is not actually being
@@ -1838,6 +1999,7 @@
     if (running) return;
     ensureAudio();
     askToNotify();
+    revivePlant();
 
     // "left === total" means this is a session starting from the top rather
     // than a resume after a pause, so it is the moment to fix which tag the
@@ -1879,6 +2041,10 @@
   }
 
   function reset() {
+    // Leaving a focus session part-way through is abandoning it, and the plant
+    // grown from it dies. A reset at the top of a session, or during a break,
+    // has grown nothing to kill, though a break's reset does clear the flower.
+    if (mode === "focus" && left < total) wiltPlant();
     resetToFocus();
   }
 
