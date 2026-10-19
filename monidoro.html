@@ -591,7 +591,7 @@
 
   /* Every control is a fixed square so the rows line up down the column; the
      name is the only thing that stretches. */
-  .task-pick, .task-done, .task-del{
+  .task-pick, .task-done, .task-del, .task-indent{
     flex:0 0 26px; min-width:0; height:26px; padding:0; line-height:1;
     display:grid; place-content:center; font-size:.78rem;
     background:transparent; border-color:transparent;
@@ -603,7 +603,15 @@
     border-radius:6px; font-size:.72rem;
   }
   .task-done[aria-checked="true"]{color:var(--accent); border-color:var(--accent)}
+  /* The nesting control is dimmer than the rest: it is a property of the row,
+     not the row's own job. */
+  .task-indent{color:var(--mut); font-size:.7rem}
+  .task-indent:disabled{opacity:.3}
+  .task-indent:not(:disabled):hover{color:var(--ink)}
   .task-del{color:var(--warn); font-size:.95rem}
+  /* A subtask is the same row set in from the left; the dot, the name and the
+     badge are what differ, so the indent is the whole of the shape. */
+  .task[data-depth="1"]{margin-left:18px}
   .task-text{
     flex:1 1 auto; min-width:0; width:0; padding:5px 4px; font:inherit;
     font-size:.8rem; border:0; border-radius:6px;
@@ -630,6 +638,18 @@
     font-variant-numeric:tabular-nums;
   }
   .task-count[data-met="true"]{color:var(--accent)}
+
+  /* Five controls is a lot for a phone, and the name is the only thing that
+     stretches, so a narrow row tightens everything rather than leaving the name
+     a couple of characters wide. Each control keeps its role; they are simply
+     closer together, and the panel gives back some of its own margin. */
+  @media (max-width:400px){
+    #tasksModal .modal-panel{padding-left:10px; padding-right:10px}
+    .task{gap:4px}
+    .task-pick, .task-done, .task-del, .task-indent{flex-basis:24px}
+    .task-est{flex-basis:38px}
+    .task[data-depth="1"]{margin-left:14px}
+  }
 
   .task-actions{display:flex; gap:6px; margin-top:12px}
   .task-actions[hidden]{display:none}
@@ -1487,6 +1507,14 @@
   const TASK_EST_MAX = 99;
   const TASK_USED_MAX = 9999;
 
+  /* A subtask is a row indented under the task above it, one level deep: depth
+     0 is a task, depth 1 is a subtask of the nearest depth-0 row before it.
+     One level and not a tree, because a second level would make every move a
+     move of a whole movement: it is the level that costs almost nothing and
+     buys almost all of it. The nesting is stored on the row, not as child
+     lists, so the list stays one flat array and a move is still a splice. */
+  const TASK_DEPTH_MAX = 1;
+
   // Never trust stored JSON: an entry that cannot be read is dropped rather than
   // guessed at, and the pointer is kept only when it lands on a task that is
   // really there.
@@ -1513,10 +1541,16 @@
         id: item.id,
         text: text,
         done: item.done === true,
+        depth: clampInt(item.depth, 0, TASK_DEPTH_MAX, 0),
         est: clampInt(item.est, 0, TASK_EST_MAX, 0),
         used: clampInt(item.used, 0, TASK_USED_MAX, 0)
       });
     });
+
+    // A subtask with nothing above it - the first row of an import that starts
+    // with one, or a hand edit - is a task rather than a row floating with no
+    // parent to belong to.
+    normalizeDepths(clean.items);
 
     const current = typeof raw.current === "string" ? raw.current : "";
     if (taken[current]) clean.current = current;
@@ -4225,9 +4259,70 @@
     return id;
   }
 
+  // A subtask with no task above it becomes a task. Run after anything that can
+  // remove the row a subtask belonged to - an import, a delete, a clear - so the
+  // list never holds a row that belongs to nothing.
+  function normalizeDepths(items) {
+    let seenTask = false;
+    items.forEach(function (task) {
+      // Once a task has been seen the list has somewhere for a subtask to
+      // belong, so only the rows above the first one are lifted.
+      if (task.depth === 0 || !seenTask) {
+        task.depth = 0;
+        seenTask = true;
+      }
+    });
+  }
+
+  // The subtasks of a task: the depth-1 rows immediately under it. Reading them
+  // off the flat list each time rather than caching a child list is what keeps a
+  // move a plain splice - there is no second structure to keep in step.
+  function subtasksOf(task) {
+    const items = tasks.items;
+    const i = items.indexOf(task);
+    const out = [];
+    if (i < 0) return out;
+    for (let j = i + 1; j < items.length && items[j].depth === 1; j++) out.push(items[j]);
+    return out;
+  }
+
+  // The task a subtask belongs to, or null for a task of its own.
+  function parentOf(task) {
+    if (!task || task.depth !== 1) return null;
+    const items = tasks.items;
+    for (let j = items.indexOf(task) - 1; j >= 0; j--) {
+      if (items[j].depth === 0) return items[j];
+    }
+    return null;
+  }
+
+  // The nearest task above, whether or not this row is its subtask.
+  function taskAbove(task) {
+    const items = tasks.items;
+    for (let j = items.indexOf(task) - 1; j >= 0; j--) {
+      if (items[j].depth === 0) return items[j];
+    }
+    return null;
+  }
+
+  // Used and estimate as the row shows them. A task that has subtasks counts
+  // their work as well, or a parent would sit at zero while everything under it
+  // moved. Its own estimate stands when it has one, and the subtasks' estimates
+  // make it up when it does not, so setting an estimate and then breaking the
+  // work down does not double it.
+  function rolledCount(task) {
+    const kids = subtasksOf(task);
+    if (!kids.length) return { used: task.used, est: task.est };
+    let used = task.used;
+    let sum = 0;
+    kids.forEach(function (kid) { used += kid.used; sum += kid.est; });
+    return { used: used, est: task.est > 0 ? task.est : sum };
+  }
+
   // "2/4" once an estimate is set, plain "2" until then.
   function taskCountText(task) {
-    return task.est > 0 ? task.used + "/" + task.est : String(task.used);
+    const n = rolledCount(task);
+    return n.est > 0 ? n.used + "/" + n.est : String(n.used);
   }
 
   // The badge is updated where it stands rather than by rebuilding the list: a
@@ -4235,13 +4330,21 @@
   function renderTaskCount(row, task) {
     const count = row.querySelector(".task-count");
     if (!count) return;
-    const met = task.est > 0 && task.used >= task.est;
+    const n = rolledCount(task);
+    const met = n.est > 0 && n.used >= n.est;
     count.textContent = taskCountText(task);
     count.dataset.met = String(met);
     // The colour is the only thing that says the estimate is met, so the tooltip
     // says it in words as well.
     count.title = "Focus sessions finished on this task" +
+      (subtasksOf(task).length ? ", subtasks included" : "") +
       (met ? " - estimate met" : "");
+  }
+
+  // Repaint one row's badge in place, if the list is open at all.
+  function renderTaskBadge(task) {
+    const row = el.taskList.querySelector('.task[data-id="' + task.id + '"]');
+    if (row) renderTaskCount(row, task);
   }
 
   function addTask(text) {
@@ -4249,7 +4352,7 @@
     if (!trimmed || tasks.items.length >= TASK_MAX) return null;
 
     const task = {
-      id: uniqueTaskId(), text: trimmed, done: false, est: 0, used: 0
+      id: uniqueTaskId(), text: trimmed, done: false, depth: 0, est: 0, used: 0
     };
     tasks.items.push(task);
     // The first task added becomes the one you are working on: adding a task and
@@ -4261,10 +4364,95 @@
   }
 
   function removeTask(id) {
-    tasks.items = tasks.items.filter(function (task) { return task.id !== id; });
+    const task = taskById(id);
+    if (!task) return;
+    // Deleting a task lets its subtasks out rather than taking them with it:
+    // one × should not delete work that is still on screen and still counted.
+    if (task.depth === 0) {
+      subtasksOf(task).forEach(function (kid) { kid.depth = 0; });
+    }
+    tasks.items = tasks.items.filter(function (item) { return item.id !== id; });
     if (tasks.current === id) tasks.current = "";
     saveTasks();
     renderTasks();
+  }
+
+  // Whether the row above is one this task could be a subtask of, and whether
+  // doing so would push a level under a level.
+  function canIndent(task) {
+    if (!task || task.depth !== 0) return false;
+    if (subtasksOf(task).length) return false;
+    return Boolean(taskAbove(task));
+  }
+
+  // The one nesting control, reachable by button as well as by Alt and an arrow
+  // key. It toggles, so a subtask row offers the way back out.
+  function toggleIndent(id) {
+    const task = taskById(id);
+    if (!task) return;
+
+    if (task.depth === 1) {
+      const parent = parentOf(task);
+      task.depth = 0;
+      if (parent) {
+        // Out to just *after* its former parent's group, not in place: left
+        // where it was, the brothers below it would silently change parent.
+        const items = tasks.items;
+        items.splice(items.indexOf(task), 1);
+        let at = items.indexOf(parent);
+        while (at + 1 < items.length && items[at + 1].depth === 1) at += 1;
+        items.splice(at + 1, 0, task);
+      }
+    } else {
+      if (!canIndent(task)) return;
+      task.depth = 1;
+    }
+    saveTasks();
+    renderTasks();
+    focusInTask(id, "task-indent");
+  }
+
+  // Move a row (and, for a task, everything nested under it) one place up or
+  // down. A subtask moves only among its brothers, so it can never be dropped
+  // where there is no parent above it.
+  function moveTask(task, dir) {
+    const items = tasks.items;
+    const i = items.indexOf(task);
+    if (i < 0) return false;
+
+    if (task.depth === 1) {
+      const parent = parentOf(task);
+      if (!parent) return false;
+      const p = items.indexOf(parent);
+      const last = p + subtasksOf(parent).length;
+      const to = i + dir;
+      if (to <= p || to > last) return false;
+      items.splice(i, 1);
+      items.splice(to, 0, task);
+    } else {
+      const blocks = orderedBlocks();
+      let bi = -1;
+      blocks.forEach(function (block, index) { if (block[0] === task) bi = index; });
+      const bj = bi + dir;
+      if (bi < 0 || bj < 0 || bj >= blocks.length) return false;
+      const tmp = blocks[bi];
+      blocks[bi] = blocks[bj];
+      blocks[bj] = tmp;
+      tasks.items = [].concat.apply([], blocks);
+    }
+    saveTasks();
+    renderTasks();
+    return true;
+  }
+
+  // The list split into tasks, each with the subtasks that follow it.
+  function orderedBlocks() {
+    const blocks = [];
+    tasks.items.forEach(function (task) {
+      if (task.depth === 0 || !blocks.length) blocks.push([task]);
+      else blocks[blocks.length - 1].push(task);
+    });
+    return blocks;
   }
 
   // A finished task cannot be the one you are working on, so it lets go of the
@@ -4295,9 +4483,13 @@
     task.used = Math.min(TASK_USED_MAX, task.used + 1);
     saveTasks();
 
+    // A parent counts its subtasks, so a session on one moves two badges. Both
+    // are repainted where they stand, for the same reason a name is not rebuilt.
+    const parent = parentOf(task);
     const row = el.taskList.querySelector('.task[data-id="' + task.id + '"]');
     if (row) {
       renderTaskCount(row, task);
+      if (parent) renderTaskBadge(parent);
       renderCurrentTask();
     } else {
       renderTasks();
@@ -4316,6 +4508,7 @@
     row.className = "task";
     row.dataset.id = task.id;
     row.dataset.done = String(task.done);
+    row.dataset.depth = String(task.depth);
     row.dataset.current = String(tasks.current === task.id);
     // The row is what you drag, but a field inside it keeps its own behaviour,
     // so selecting text in a name is still selecting text.
@@ -4346,6 +4539,25 @@
     done.setAttribute("aria-label", done.title + ": " + task.text);
     done.addEventListener("click", function () { toggleTaskDone(task.id); });
     row.appendChild(done);
+
+    // One control for the nesting, and it toggles: a task offers the way in, a
+    // subtask offers the way back out. A task with no task above it, or one that
+    // has subtasks of its own, has nowhere to go, so there the button is off
+    // rather than mysterious.
+    const indent = document.createElement("button");
+    indent.type = "button";
+    indent.className = "task-indent";
+    const isSub = task.depth === 1;
+    indent.textContent = isSub ? "\u21e4" : "\u21e5";
+    indent.disabled = !isSub && !canIndent(task);
+    indent.title = isSub
+      ? "Move this out to a task of its own"
+      : (indent.disabled
+        ? "Only a task with a task above it can become a subtask"
+        : "Make this a subtask of the task above");
+    indent.setAttribute("aria-label", indent.title + ": " + task.text);
+    indent.addEventListener("click", function () { toggleIndent(task.id); });
+    row.appendChild(indent);
 
     const text = document.createElement("input");
     text.type = "text";
@@ -4406,17 +4618,39 @@
 
     row.addEventListener("dragstart", function (event) {
       dragTaskId = task.id;
-      row.classList.add("dragging");
+      // A task drags its subtasks with it; a subtask drags alone. Marking the
+      // whole group is also what tells the drop handler how much is moving.
+      subtreeRowNodes(task).forEach(function (node) {
+        node.classList.add("dragging");
+      });
       event.dataTransfer.effectAllowed = "move";
       // Firefox refuses to start a drag with nothing on the clipboard.
       event.dataTransfer.setData("text/plain", task.text);
     });
     row.addEventListener("dragend", function () {
-      row.classList.remove("dragging");
+      Array.prototype.forEach.call(el.taskList.children, function (node) {
+        node.classList.remove("dragging");
+      });
       commitTaskOrder();
     });
 
     return row;
+  }
+
+  // The <li>s a move carries: the row itself, and for a task everything nested
+  // under it. A subtask carries only itself.
+  function subtreeRowNodes(task) {
+    const rows = Array.prototype.slice.call(el.taskList.children);
+    let start = -1;
+    rows.forEach(function (node, i) { if (node.dataset.id === task.id) start = i; });
+    if (start < 0) return [];
+    const out = [rows[start]];
+    if (task.depth === 0) {
+      for (let i = start + 1; i < rows.length && rows[i].dataset.depth === "1"; i++) {
+        out.push(rows[i]);
+      }
+    }
+    return out;
   }
 
   // The rows are the truth after a drag, so the order is read back out of the
@@ -4437,44 +4671,96 @@
     renderTasks();
   }
 
-  // The row follows the pointer, so it lands where it is dropped rather than
-  // jumping a whole row at a time.
+  // A drop rearranges whole groups rather than single rows: a task moves with
+  // its subtasks and only lands on a group boundary, and a subtask moves only
+  // among its brothers. Anything else could leave a subtask with no task above
+  // it, which is a shape the list does not have.
   el.taskList.addEventListener("dragover", function (event) {
     if (!dragTaskId) return;
     event.preventDefault();
 
-    const dragged = el.taskList.querySelector(".task.dragging");
+    const dragged = taskById(dragTaskId);
     const over = event.target.closest ? event.target.closest(".task") : null;
-    if (!dragged || !over || over === dragged) return;
+    if (!dragged || !over) return;
+
+    const target = taskById(over.dataset.id);
+    if (!target) return;
+    const moving = subtreeRowNodes(dragged);
+    if (moving.indexOf(over) >= 0) return;
 
     const box = over.getBoundingClientRect();
     const after = event.clientY > box.top + box.height / 2;
-    el.taskList.insertBefore(dragged, after ? over.nextSibling : over);
+
+    if (dragged.depth === 1) {
+      // A subtask stays within its own parent: over the parent itself, or over
+      // one of its brothers.
+      const parent = parentOf(dragged);
+      if (!parent) return;
+      if (target !== parent && parentOf(target) !== parent) return;
+
+      const kids = subtreeRowNodes(parent).slice(1);
+      if (target === parent) {
+        // Above the parent's midpoint would mean "before the parent", which is
+        // the one place a subtask cannot be; the nearest legal drop is the head
+        // of its own group.
+        if (after && kids.length) moveNodes(moving, kids[kids.length - 1], true);
+        else moveNodes(moving, over, true);
+      } else {
+        moveNodes(moving, over, after);
+      }
+      return;
+    }
+
+    // A task lands before or after a whole group, so it can never split the one
+    // it is dropped into.
+    const top = target.depth === 0 ? target : parentOf(target);
+    if (!top || top === dragged) return;
+    const group = subtreeRowNodes(top);
+    if (!group.length) return;
+    moveNodes(moving, after ? group[group.length - 1] : group[0], after);
   });
 
-  // Notion's own idiom: hold Alt and press an arrow key to move the row you are
-  // in, from the field you are already typing in. The global shortcuts bail out
-  // when Alt is held, so nothing here can steal the timer's keys.
+  // Move a run of rows together, order preserved. The node inserted after is
+  // captured first, because inserting the first one changes what "after" means.
+  function moveNodes(nodes, refNode, after) {
+    if (!refNode) return;
+    if (after) {
+      const anchor = refNode.nextSibling;
+      nodes.forEach(function (node) { el.taskList.insertBefore(node, anchor); });
+    } else {
+      nodes.forEach(function (node) { el.taskList.insertBefore(node, refNode); });
+    }
+  }
+
+  // Notion's own idiom: hold Alt and press an arrow key from the field you are
+  // already typing in. Up and down move the row, right indents it under the task
+  // above and left brings it back out. The global shortcuts bail out when Alt is
+  // held, so nothing here can steal the timer's keys.
   el.taskList.addEventListener("keydown", function (event) {
     if (!event.altKey) return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-
     const row = event.target.closest ? event.target.closest(".task") : null;
     if (!row) return;
+    const task = taskById(row.dataset.id);
+    if (!task) return;
 
-    const id = row.dataset.id;
-    let index = -1;
-    tasks.items.forEach(function (task, i) { if (task.id === id) index = i; });
-    const to = index + (event.key === "ArrowUp" ? -1 : 1);
-    if (index < 0 || to < 0 || to >= tasks.items.length) return;
+    if (event.key === "ArrowRight") {
+      if (!canIndent(task)) return;
+      event.preventDefault();
+      toggleIndent(task.id);
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      if (task.depth !== 1) return;
+      event.preventDefault();
+      toggleIndent(task.id);
+      return;
+    }
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
 
-    event.preventDefault();
     const held = event.target.className;
-    const moved = tasks.items.splice(index, 1)[0];
-    tasks.items.splice(to, 0, moved);
-    saveTasks();
-    renderTasks();
-    focusInTask(id, held);
+    if (!moveTask(task, event.key === "ArrowUp" ? -1 : 1)) return;
+    event.preventDefault();
+    focusInTask(task.id, held);
   });
 
   function renderTasks() {
@@ -4493,8 +4779,9 @@
     el.taskActions.hidden = finished === 0;
 
     el.taskHint.textContent = tasks.items.length
-      ? "Alt and the arrow keys move a task. A focus session you finish counts " +
-        "against the task you are working on."
+      ? "The \u21e5 button, or Alt and the arrow keys, indents a task under the " +
+        "one above it. A finished focus session counts against the task you are " +
+        "working on, and a task counts its subtasks too."
       : "No tasks yet. Add one above - it becomes the task you are working on, " +
         "and every focus session you finish is counted against it.";
 
@@ -4513,17 +4800,17 @@
       return;
     }
 
-    const count = taskCountText(task);
+    const n = rolledCount(task);
     el.taskCurrent.hidden = false;
     el.taskCurrentText.textContent = task.text;
-    el.taskCurrentCount.textContent = count;
+    el.taskCurrentCount.textContent = taskCountText(task);
     el.taskCurrent.title = "Open your tasks";
     el.taskCurrent.setAttribute(
       "aria-label",
       "Open your tasks. Working on " + task.text + ", " +
-      (task.est > 0
-        ? count + " sessions finished of " + task.est + " estimated"
-        : task.used + (task.used === 1
+      (n.est > 0
+        ? n.used + " sessions finished of " + n.est + " estimated"
+        : n.used + (n.used === 1
           ? " session finished"
           : " sessions finished")) +
       "."
@@ -4572,6 +4859,9 @@
     if (!confirmed) return;
 
     tasks.items = tasks.items.filter(function (task) { return !task.done; });
+    // A finished task can take the head of a group with it, leaving its
+    // unfinished subtasks with nothing above them.
+    normalizeDepths(tasks.items);
     saveTasks();
     renderTasks();
   }

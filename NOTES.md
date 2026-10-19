@@ -6,14 +6,14 @@
 >
 > **The order for new work is the list under "Remaining work"**, and it is kept
 > in the order it was agreed. Done: the contrast pass over the backdrops and the
-> panels (14), the extra focus noises (15), the history statistics (16) and the
-> accent-and-tag palette (17).
+> panels (14), the extra focus noises (15), the history statistics (16), the
+> accent-and-tag palette (17) and subtasks in the task list (18).
 >
 > Next, and the owner has asked for **all of it**, one commit at a time and
-> without asking again in between: the four task-list slices in the order they
-> are written down — subtasks, reordering on touch, a due date or "today" list,
-> a tag per task. Nothing there is started — the tree is clean, and every feature
-> described below was committed and pushed as it was finished.
+> without asking again in between: the three task-list slices still to come, in
+> the order they are written down — reordering on touch, a due date or "today"
+> list, a tag per task. Every feature described below was committed as it was
+> finished.
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
 no dependencies, no network. Designed to be opened by double-click from
@@ -161,6 +161,21 @@ and pushed.
   which says how many it is about to take. Alt + arrows aside, every control is
   a button with a label, and the list is capped so a runaway import cannot fill
   the store
+- Subtasks in that list, one indent deep: the ⇥ button, or Alt and →, tucks a
+  task under the one above it, and ⇤ (Alt and ←) lifts it back out. It is the one
+  Notion idea the list was first built without, and the reason it was left out
+  then is the reason it is kept to one level now: a second level turns every move
+  into the move of a whole movement, so it would cost far more than it buys. A
+  subtask is stored as the row's own `depth` rather than as a child list, so the
+  list stays one flat array and a move is still a splice. A parent's badge rolls
+  up — its own sessions plus its subtasks' — and a parent with no estimate of its
+  own takes its subtasks' sum rather than showing a total that counts the same
+  sessions twice. Deleting a parent lifts its subtasks to the top level instead
+  of destroying the work, and an outdented subtask lands just after its former
+  parent's group so the siblings below it keep the parent they had. A drag moves
+  a block: a task carries its subtasks and lands only on a group boundary, while
+  a subtask reorders among its brothers and cannot be dropped under a different
+  parent. Alt and an arrow key move exactly the same blocks
 - Every text colour measured, in both themes, against the pixels actually
   painted behind it — main screen, drawer, both dialogs and the calendar's five
   heat levels — and everything it failed fixed at the colour, not argued away.
@@ -200,7 +215,7 @@ erase anyone's history.
 | `monidoro.settings` | `{focusSec, breakSec, longBreakSec, cycles, goalMinutes, theme, accent, sound, ambient, ambientVolume, backdrop, backdropDim, name, tags, activeTag}` |
 | `monidoro.completed` | total focus sessions ever, as a string number |
 | `monidoro.days` | `{"YYYY-MM-DD": {sessions, seconds, byTag?}}` |
-| `monidoro.tasks` | `{current, items: [{id, text, done, est, used}]}` |
+| `monidoro.tasks` | `{current, items: [{id, text, done, est, used, depth}]}` |
 | `monidoro.photo` | a `data:image/jpeg` URL for the chosen background photo |
 
 `settings.tags` is `[{id, name, color}]` — `id` is a lowercase slug built
@@ -228,7 +243,12 @@ lowercase slug built internally like a tag's, and `sanitizeTasks()` drops an
 entry that cannot be read rather than guessing — including a duplicate id, since
 every lookup is by id and a duplicate would leave one row unreachable and
 undeletable. `current` is kept only when it lands on a task that is really there,
-so a stored pointer cannot outlive its task.
+so a stored pointer cannot outlive its task. `depth` is clamped to 0 or 1 and
+then `normalizeDepths()` lifts any subtask that has no task above it: a stored
+depth is a fact about the row's *neighbours*, so it only means anything as part
+of a whole list and is re-derived from that list on every load and every import.
+A row that is promoted out of a deleted parent, or left dangling at the top after
+a clear-finished, is therefore a task rather than a subtask that belongs nowhere.
 
 Two rules for a to-do list that is not history:
 
@@ -286,8 +306,8 @@ Nothing here is half-finished. Everything asked for so far is in and described
 above: keyboard shortcuts with a completion notification (7), the plant with
 confetti (8), backgrounds (9), the countdown in the tab title (10), music from
 files of your own (11), the bundled lofi track (12), the task list (13), the
-contrast pass (14), the extra focus noises (15), the history statistics (16) and
-the accent-and-tag palette (17).
+contrast pass (14), the extra focus noises (15), the history statistics (16), the
+accent-and-tag palette (17) and subtasks in the task list (18).
 
 The notification question on `file://` is **answered**, and the answer is that it
 does nothing there — see gotcha 23. Every call was already guarded, so it
@@ -302,17 +322,21 @@ were sized to carry a label (5:1 against `--bg`) but the harshest surface is the
 accent used as *text* on the task row's own 8% tint, which wants a luminance near
 0.27 rather than 0.23.
 
+Subtasks are done as well, and the shapes that were decided are in the storage
+section: one level, a flat array with a `depth` on each row, a rolled-up badge, a
+parent whose estimate can be made of its subtasks, and moves that carry a whole
+block. What it cost in layout — a third 26 px control on a row that was already
+tight — is answered at narrow widths rather than by dropping a control.
+
 What is left, in the order it was agreed, one commit at a time:
 
-- **The task list's next four slices**, in the order they are most likely to be
+- **The task list's next three slices**, in the order they are most likely to be
   wanted:
-  - **Subtasks**, i.e. an indent level, which is the one Notion idea this
-    deliberately left out. It changes the shape of the list (a tree, not a row
-    of items) and every reorder and count has to decide what a parent's count
-    means, so it is a feature of its own rather than a tweak.
   - **Reordering on a touch screen.** Drag and drop is a mouse gesture and Alt
     and the arrow keys need a keyboard, so on a phone the order is fixed. A
-    press-and-hold drag, or an explicit move mode, is the answer.
+    press-and-hold drag, or an explicit move mode, is the answer. Subtasks make
+    this the one to do first: the indent button already gives a phone a move
+    between levels, and the order is still the half of it that is missing.
   - **A due date or a "today" list.** The app has no notion of a day's plan yet.
     A task belongs to no day at all right now, which is what keeps the daily
     goal and the streaks about time rather than about chores.
@@ -689,6 +713,28 @@ by accident:
     moving it toward the dark glyphs. It applies to any translucent self-tint
     behind its own colour, not only this row.
 
+31. **A correction that fixes one row has to leave the list in a state that
+    agrees with it.** `normalizeDepths()` lifts a leading subtask to the top
+    level, and the first version lifted the row without recording that a task had
+    now been seen. The next row, a genuine subtask, was then judged to be an
+    orphan too and lifted as well — and so was the one after it, until a row that
+    happened to be stored as depth 0 arrived. A seeded list that should have read
+    `0,1,0,0,1,0` came out `0,0,0,0,1,0`, which looks like a clamp that is
+    ignoring its maximum. Any normalising pass that changes a row has to update
+    the same state the next row is judged by; assert on the whole list, not on
+    the one row you were thinking about.
+
+32. **In a flat tree, a reorder is a move of a whole group, and the drop target
+    is a boundary rather than a row.** A task carries its subtasks with it, so a
+    move has to splice a contiguous block; dropping one *into* the middle of
+    another group would either split that group or silently re-parent someone.
+    A subtask may only move among its brothers, because the parent it belongs to
+    is the row above its group and a drop on a stranger is a re-parent by
+    accident. The same split shows up in `Alt` + an arrow key, which has to move
+    the same block the mouse would, or the two ways of reordering disagree about
+    what the list is. Both were driven with real `DragEvent`s and real key
+    events, reading the DOM order and the stored order at every step.
+
 ## How features were verified
 
 Every feature was driven in a real browser: click real elements, read back real
@@ -735,6 +781,34 @@ fed a file with a duplicate id, an uppercase id, a blank name, a 300-character
 name and `used: -4` — all five handled exactly as the sanitizer promises. A
 backup with no `tasks` key at all was imported last, to prove the list survives
 it.
+
+Subtasks were checked by reading the rolled-up numbers and the stored order, not
+by looking at a row. A seeded list (one parent, two subtasks, a task of its own)
+gave the parent `2/5` — its own 1 plus the subtasks' 1 and 0 against its own
+estimate of 5 — `1/1` marked met on a subtask, `0/2` on the other and a plain `4`
+on the roll-up-free task; setting the parent's estimate to 0 changed it to `2/3`,
+the subtasks' own sum, which is the whole point of the rule that stops the same
+session being counted twice. A real focus session was then run to its end with
+`?focusSec=1` on a subtask: its `used` went 0 → 1 in storage and the parent's
+badge and the line under the timer both moved with it. `Alt` + ↓ moved the parent
+*and* its subtasks past the next task, `Alt` + ← lifted a subtask out to just
+after its former group leaving the sibling under the parent, `Alt` + → put it
+back, and `Alt` + ↑ on the group's first subtask did nothing, because the parent
+is the boundary. Dragging with real `DragEvent`s and a `DataTransfer` moved the
+same blocks: a parent took its subtasks along, a subtask could not be dropped
+under a different parent, a subtask reordered among its brothers, and a top-level
+block dropped onto a subtask snapped to the group boundary instead of splitting
+it — with the DOM order and the stored order read back at every step. Deleting a
+parent promoted both subtasks to depth 0 in the DOM and in storage, and a
+clear-finished left no leading subtask behind. Finally the sanitizer was fed
+`depth: 1` on the first row, `depth: 5`, `depth: -3` and no depth at all: it
+produced `0,1,0,0,1,0` — the orphan lifted, the 5 clamped to 1, the rest
+sensible — which is where gotcha 31 came from, because the first version produced
+`0,0,0,0,1,0` and looked like a broken clamp. Layout was checked by measuring
+the row at a simulated 320 px panel (no horizontal overflow; the name field
+90 px on a task and 76 px on a subtask, against 170 px on a desktop panel) and by
+screenshotting both themes: the indent glyphs, the disabled states and their
+`aria-label`s all read correctly.
 
 The contrast pass was measured, not eyeballed. The painted backdrop is rasterised
 inside the page — the body's own computed `background-*` goes into an SVG
