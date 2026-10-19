@@ -357,6 +357,7 @@
           <button type="button" data-sound="chiptune">Chiptune</button>
           <button type="button" data-sound="blip">Blip</button>
           <button type="button" data-sound="bell">Bell</button>
+          <button type="button" data-sound="swan">Swan Lake</button>
         </div>
       </div>
 
@@ -461,7 +462,7 @@
   /* ---------- configuration ---------- */
 
   const params = new URLSearchParams(location.search);
-  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
+  const SOUND_KEYS = ["classic", "chiptune", "blip", "bell", "swan"];
   const THEME_CHOICES = ["system", "light", "dark"];
   // Focus noise is synthesised too, so the app still ships as one file with no
   // audio assets and keeps working offline.
@@ -1150,6 +1151,28 @@
       tone(1046.5, now, 1.6, "sine", 0.34);
       tone(1568, now + 0.02, 1.1, "sine", 0.13);
       tone(2093, now + 0.04, 0.7, "sine", 0.07);
+    },
+    // Tchaikovsky, Swan Lake Op. 20, Act II No. 10 (1876) - public domain, so
+    // it can be synthesised here rather than shipped as an asset. B minor (two
+    // sharps). A triangle wave reads as a music box: the held opening F#5, the
+    // answering run up to E5, then the closing turn on D5. Melody only - a drone
+    // under it muddies the low end on laptop speakers. Whole thing runs about
+    // 3.4s, so it stays an alert rather than a tune.
+    swan: function (now) {
+      const melody = [
+        [739.99, 0,    0.85], // F#5, held
+        [493.88, 0.9,  0.3],  // B4
+        [554.37, 1.16, 0.3],  // C#5
+        [587.33, 1.42, 0.3],  // D5
+        [659.25, 1.68, 0.3],  // E5
+        [739.99, 1.94, 0.3],  // F#5
+        [587.33, 2.2,  0.3],  // D5
+        [739.99, 2.46, 0.3],  // F#5
+        [587.33, 2.72, 0.72]  // D5, held
+      ];
+      melody.forEach(function (note) {
+        tone(note[0], now + note[1], note[2], "triangle", 0.26);
+      });
     }
   };
 

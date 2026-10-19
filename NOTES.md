@@ -35,7 +35,8 @@ and pushed.
 - Presets: Classic 25/5, Deep 50/10, Ultradian 90/20
 - Custom focus / break / long-break lengths, sessions per set, daily goal
 - Daily goal progress bar (minutes) and current / best streaks
-- Four synthesised alert sounds via Web Audio — no audio files
+- Five synthesised alert sounds via Web Audio — no audio files: Classic,
+  Chiptune, Blip, Bell, and Swan Lake (Tchaikovsky, public domain)
 - Optional profile name, shown as a greeting
 - Per-day history, month heatmap with prev/next navigation
 - Backup export to JSON, import with full re-validation, erase history
@@ -100,28 +101,7 @@ Two rules that must not be broken:
 
 ## Remaining work
 
-### 7. Swan Lake alert sound
-
-Requested, researched, not yet written. It is a fifth entry in `SOUNDS`, added
-to `SOUND_KEYS` and to the `data-sound` button row — the sound picker already
-handles rendering and preview, so the work is confined to one function.
-
-Tchaikovsky, *Swan Lake* Op. 20, Act II No. 10 (1876) — **public domain**, and
-synthesised like the others, so no asset file. The theme is in B minor (two
-sharps: F♯ and C♯). Bars 2-3, the recognisable opening:
-
-```
-F♯5 | B4 C♯5 D5 E5 | F♯5 D5 F♯5 D5
-```
-
-Frequencies for `tone()`: B4 493.88, C♯5 554.37, D5 587.33, E5 659.25,
-F♯5 739.99. A triangle wave with the existing envelope reads as a music box and
-suits the app. Plan was to hold the opening F♯ and the final D, and keep the
-whole thing under about 3.5 seconds so it stays an alert rather than a song.
-The second phrase (`C♯ D E F♯ G | A G F♯ G A | B A G A B`) continues it if a
-longer version is ever wanted.
-
-### 8. Keyboard shortcuts + notification
+### 7. Keyboard shortcuts + notification
 
 - `Space` = start / pause, `R` = reset.
 - A desktop notification when time is up.
@@ -132,7 +112,7 @@ longer version is ever wanted.
   shortcuts must not fire while a text field has focus, or typing a name would
   start and stop the timer.
 
-### 9. Confetti + tree
+### 8. Confetti + tree
 
 A CSS-only celebration on completion, and a Forest-style tree that grows while
 focusing and dies if you bail early.
@@ -195,7 +175,10 @@ focusing and dies if you bail early.
    threshold was squashing the *whole* signal to about 40% of its intended level
    rather than catching peaks, because noise is dense enough to keep a
    compressor engaged continuously. It now sits at -1 dB and reports 0.00 dB of
-   reduction, which is what a safety net should look like.
+   reduction, which is what a safety net should look like. Swan Lake was held to
+   the same bar: rendered offline it peaks at 0.25 with no clipping, runs 3.44 s
+   so it stays an alert, and the zero-crossing rate of each note read back at the
+   frequency it was meant to be (F♯5 740, B4 494, C♯5 554, D5 587, E5 659).
 
 ## How features were verified
 
