@@ -17,11 +17,11 @@ no dependencies, no network. Designed to be opened by double-click from
 Testing with the local server is easier to automate, but `file://` is the real
 target and must keep working.
 
-One file is no longer quite enough: **`swan-lake.ogg`** must sit next to
-`monidoro.html` for the Swan Lake focus noise to play the real recording. It is
-strictly optional — with the file missing the app falls back to its own
-synthesised melody, so a copy of the HTML on its own still makes every sound it
-ever did.
+One file is no longer quite enough: **`swan-lake.ogg`** and
+**`swan-lake-archive.ogg`** must sit next to `monidoro.html` for the two Swan
+Lake focus noises to play the real recordings. Both are strictly optional — with
+either file missing, that choice falls back to the app's own synthesised melody,
+so a copy of the HTML on its own still makes every sound it ever did.
 
 The file was called `monodoro.html` until the app was renamed. If a browser
 stored its data against the old *file path* rather than against `file://` as a
@@ -49,11 +49,16 @@ and pushed.
 - Tags per session: chip row on the main screen, editable in Customize, with a
   per-tag breakdown of every day and a tag filter in the history heatmap
 - Focus noise: rain / brown / cafe, synthesised from two noise buffers and
-  filtered, plus Swan Lake — the whole Scene (Tchaikovsky, Op. 20 Act II No. 10)
-  as `swan-lake.ogg`, a real 1933 orchestral recording, looped. With that file
-  missing it plays the app's own transcription of the same Scene, taken from the
-  engraving's MusicXML (215 notes, 182 s, looped), so the choice is never silent.
-  One volume slider drives both. Plays only while a focus session runs
+  filtered, plus two real Swan Lake recordings, both looped: `swan-lake.ogg`
+  (Barbirolli, 1933 — the Scene alone, 2:30) and `swan-lake-archive.ogg`
+  (European Archive — the Scene and on into the rest of Act II, 4:10). They are
+  offered as "Swan Lake" and "Swan Lake (long)" because they differ in length
+  rather than in music. With a file missing, that choice plays the app's own
+  transcription of the Scene, taken from the engraving's MusicXML (215 notes,
+  182 s, looped), so the choice is never silent. One volume slider drives all of
+  them, and they are levelled to each other on disk so switching between them
+  does not call for a different slider position. Plays only while a focus
+  session runs
 - Customize opens as a drawer from the right (it outgrew an inline panel) and
   History as a centred dialog; both close on the backdrop, on Escape, and return
   focus to the button that opened them. The drawer scrolls internally, because
@@ -248,7 +253,26 @@ focusing and dies if you bail early.
     transfer sounds fainter still at the same RMS — it was reported straight away
     as "the volume was low". The recording therefore gets
     `swanRecordingVolume()`, where the slider *is* the element volume. Loudness is
-    a judgement, so check it by ear and not only by RMS.
+    a judgement, so check it by ear and not only by RMS. The corollary is that a
+    transfer *quieter* than the current one cannot be fixed in the app at all:
+    volume stops at 1.00, so giving it extra gain would only buy dead travel at
+    the top of the slider and still end up short. The archive recording measured
+    10.7 dB below the HMV one once its peaks were equal, so it is levelled on
+    disk instead — see gotcha 14 and the credits.
+
+14. **Levelling a recording is where the quiet bugs live.** Three things cost
+    time when preparing the archive transfer, all worth knowing before touching
+    an audio file again. (a) `alimiter`'s `limit` is a linear amplitude
+    (0.0625–1), but its `level` option — *auto level*, **on by default** —
+    scales the output straight back up to undo the gain reduction. A ceiling
+    that appears to do nothing is that option; pass `level=0`. (b) Lossy Vorbis
+    puts back a peak slightly above whatever ceiling you asked for (~0.2-0.6 dB
+    here), so leave headroom and verify the *decoded* file, not the filter's
+    intent. (c) `ffmpeg -ac 1` downmixes dual-mono input by summing to √2, i.e.
+    +3 dB, so measuring a stereo file's loudness and then downmixing it
+    double-counts the level by 3 dB. There is no shortcut around measuring the
+    finished file: loudness in LUFS, peak, and inter-sample peak, before and
+    after.
 
 ## How features were verified
 
@@ -269,10 +293,31 @@ Keep that bar. It has already paid for itself twice.
   [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tchaikovsky_Swan_Lake_Op.20_No.10._Sc%C3%A8ne.ogg)
   as public domain. Tchaikovsky died in 1893, so the composition itself is long
   out of copyright everywhere.
-- The recording's own status is the murky part, and worth knowing before this is
-  ever republished: Commons files it under a PD-EU rationale (a pre-1957 sound
+- **`swan-lake-archive.ogg`** — the same Scene and the numbers that follow it,
+  released as "Act II Pt. 1" by the European Archive through
+  [Musopen](https://musopen.org/) under a public domain mark, hosted on
+  [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tchaikovsky_-_Swan_Lake_Op.20_-_Act_II_Pt.1.ogg).
+  Neither the orchestra nor the recording date is stated anywhere in the release,
+  which is why the app labels it by length rather than by performer. It arrived
+  about 10 dB quieter than the HMV transfer at equal peaks and was levelled to it
+  before shipping (both now measure -18 LUFS and an RMS of 0.114, against 0.9
+  peaks), which took about +10.4 dB of gain with roughly 3 dB of peak limiting —
+  louder than the transfer is, deliberately, because the alternative was a second
+  focus sound that sounded broken next to the first.
+- The HMV transfer's own status is the murky part, and worth knowing before this
+  is ever republished: Commons files it under a PD-EU rationale (a pre-1957 sound
   recording is out of copyright in the EU after 50 years), but pre-1972 US sound
   recordings are protected for 100 years from publication, i.e. into the 2030s.
   Fine for a private timer; not a clean US redistribution.
+- Considered and **not** used, for whoever looks next: a 1959 Valiant LP
+  transfer of Act II (CC0, released by Gerard Arthus, and easily the brightest of
+  the lot — energy to 16 kHz where the HMV one stops dead at 6 kHz — but a
+  budget-label performance, and the Scene's position inside its 6:32 medley
+  could not be located by signal analysis), a duller ~4 kHz Musopen sibling, and
+  a 1946 Decca transfer by Sidney Beer on the National Symphony Orchestra of
+  London, which exists on Commons only as a 144 MB FLAC whose file 404s. The
+  wider finding stands: **there is no modern freely-licensed recording of the
+  Scene.** Everything free is a 1933-1959 orchestral transfer, so the only real
+  choice is between old transfers, not between old and new.
 - Everything else in the app is written from scratch, and the synthesised melody
   is transcribed from a public-domain engraving's MusicXML rather than by ear.

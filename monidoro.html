@@ -381,6 +381,7 @@
           <button type="button" data-ambient="deep">Brown</button>
           <button type="button" data-ambient="cafe">Cafe</button>
           <button type="button" data-ambient="swan">Swan Lake</button>
+          <button type="button" data-ambient="swanLong">Swan Lake (long)</button>
         </div>
         <p class="hint">Plays only while a focus session runs. Picking one previews it.</p>
       </div>
@@ -477,9 +478,11 @@
   const params = new URLSearchParams(location.search);
   const SOUND_KEYS = ["classic", "chiptune", "blip", "bell"];
   const THEME_CHOICES = ["system", "light", "dark"];
-  // Focus noise is synthesised too, so the app still ships as one file with no
-  // audio assets and keeps working offline.
-  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan"];
+  // The noises are all synthesised, so only the Swan Lake recordings need a
+  // companion file; everything else still works from a single file offline.
+  // "swan" and "swanLong" are two transfers of the same music, described where
+  // their files are named further down.
+  const AMBIENT_KEYS = ["off", "rain", "deep", "cafe", "swan", "swanLong"];
 
   // Accents are restricted to a plain six-digit hex colour, so a hand-edited
   // or imported value can never smuggle anything else into the stylesheet.
@@ -1447,15 +1450,28 @@
     return { master: master, limiter: limiter };
   }
 
-  // The real thing: the Scene played by an orchestra, bundled as swan-lake.ogg
-  // beside this file. It plays through a plain media element rather than the Web
-  // Audio graph above, because routing a media element through a graph taints it
-  // when the page is opened from file:// - and a tainted source is silence.
+  // The real thing: the Scene played by an orchestra, bundled as files beside
+  // this one. They play through a plain media element rather than the Web Audio
+  // graph above, because routing a media element through a graph taints it when
+  // the page is opened from file:// - and a tainted source is silence.
   //
-  // Tchaikovsky's music is public domain, and so is this particular transfer (see
-  // NOTES.md for the credit). If the file is missing or will not decode, the
+  // Two transfers are offered, and they differ in length rather than in music:
+  // the HMV one is the Scene on its own, and the European Archive one plays on
+  // into the rest of Act II. Both were levelled to the same loudness when they
+  // were prepared - measured, not guessed - so switching between them does not
+  // call for a different slider position.
+  //
+  // Tchaikovsky's music is public domain, and so are both transfers (see
+  // NOTES.md for the credits). If a file is missing or will not decode, the
   // synthesised melody below takes over, so the choice is never simply silent.
-  const SWAN_RECORDING = "swan-lake.ogg";
+  const SWAN_RECORDINGS = {
+    swan: "swan-lake.ogg",
+    swanLong: "swan-lake-archive.ogg"
+  };
+
+  function isSwan(key) {
+    return Object.prototype.hasOwnProperty.call(SWAN_RECORDINGS, key);
+  }
 
   // The recording deliberately does not share the noises' gain curve. That curve
   // tops out at 0.28 because a stack of noise layers adds up, and matching the
@@ -1468,32 +1484,35 @@
     return Math.min(1, settings.ambientVolume / 100);
   }
 
-  let swanRecording = null;
-  let swanRecordingFailed = false;
+  // One element per recording, made once and kept: two elements can then never
+  // fight over which file the shared playback state belongs to.
+  const swanElements = {};
+  const swanFailed = {};
 
-  function swanRecordingElement() {
-    if (swanRecording) return swanRecording;
+  function swanRecordingElement(key) {
+    if (swanElements[key]) return swanElements[key];
 
-    swanRecording = new Audio();
-    swanRecording.loop = true;
-    swanRecording.preload = "auto";
+    const el = new Audio();
+    el.loop = true;
+    el.preload = "auto";
     // A missing or undecodable file must not leave a session silent, so the
     // melody takes over - but only when the recording is the thing that failed
     // while playing.
-    swanRecording.addEventListener("error", function () {
-      swanRecordingFailed = true;
-      if (ambientNodes && ambientNodes.el === swanRecording) {
+    el.addEventListener("error", function () {
+      swanFailed[key] = true;
+      if (ambientNodes && ambientNodes.el === el) {
         ambientNodes = null;
-        swanRecording.pause();
+        el.pause();
         if (audioCtx) startSwanPlayer();
       }
     });
-    swanRecording.src = SWAN_RECORDING;
-    return swanRecording;
+    el.src = SWAN_RECORDINGS[key];
+    swanElements[key] = el;
+    return el;
   }
 
-  function startSwanRecording() {
-    const el = swanRecordingElement();
+  function startSwanRecording(key) {
+    const el = swanRecordingElement(key);
     el.volume = swanRecordingVolume();
     // Rewind, so every focus session opens on the same bars instead of picking up
     // wherever the last one happened to stop.
@@ -1512,12 +1531,12 @@
 
   function startAmbientNodes() {
     if (ambientNodes) return;
-    if (settings.ambient === "swan") {
-      // The recording is tried first because it needs no audio graph at all, so
-      // it plays even where Web Audio is unavailable; the melody is the fallback,
+    if (isSwan(settings.ambient)) {
+      // A recording is tried first because it needs no audio graph at all, so it
+      // plays even where Web Audio is unavailable; the melody is the fallback,
       // not the other way round.
-      if (!swanRecordingFailed) {
-        startSwanRecording();
+      if (!swanFailed[settings.ambient]) {
+        startSwanRecording(settings.ambient);
         return;
       }
       if (!audioCtx) return;
@@ -1691,7 +1710,7 @@
     // A noise makes its character known in a moment; the Scene opens with a harp
     // arpeggio and only reaches the tune a few bars in, so it gets longer to
     // prove itself.
-    const hold = settings.ambient === "swan" ? 9000 : 4000;
+    const hold = isSwan(settings.ambient) ? 9000 : 4000;
     ambientStopId = setTimeout(function () {
       ambientStopId = null;
       if (!ambientWanted()) stopAmbientNodes();
