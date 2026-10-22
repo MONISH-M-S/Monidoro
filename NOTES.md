@@ -24,6 +24,14 @@ no dependencies, no network. Designed to be opened by double-click from
 - Double-click `monidoro.html`, **or**
 - `python -m http.server 8777 --bind 127.0.0.1`, then open
   <http://127.0.0.1:8777/monidoro.html>
+- Or, without installing anything: <https://monish-m-s.github.io/Monidoro/>
+
+GitHub Pages serves the repo's `main` branch. There is an `index.html` whose only
+job is to hand the bare address over to `monidoro.html`, because the app's file
+has a name and Pages does not guess one — without it, `/Monidoro/` was a 404
+while the app itself was live one path down. `index.html` must stay a redirect
+rather than a copy: two copies of a 200 KB file drift apart, and the copy would
+be the one nobody tests.
 
 Testing with the local server is easier to automate, but `file://` is the real
 target and must keep working.
@@ -360,8 +368,10 @@ What is left, in the order it was agreed, one commit at a time:
 Ideas raised along the way and deliberately not pursued, so nobody re-opens them
 by accident:
 
-- **Publishing to GitHub Pages.** The notification prompt would start appearing
-  there, since it is a real origin rather than `file://`.
+- **Publishing to GitHub Pages.** Done — it is live at
+  <https://monish-m-s.github.io/Monidoro/>, and it behaves differently from
+  `file://` in exactly the way gotcha 23 predicted: a real origin, so the
+  notification prompt can actually appear there.
 - **A record of dead plants.** Wilting leaves no trace anywhere: it is feedback
   for the moment, not a history of failure, and the day records stay about time
   spent.

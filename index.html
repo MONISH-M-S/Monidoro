@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monidoro</title>
+<meta name="description" content="A single-file pomodoro timer that keeps a task list, a plant and a history of where the time went.">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="refresh" content="0; url=monidoro.html">
+<link rel="canonical" href="monidoro.html">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid;
+    place-items: center;
+    background: #f6f2ea;
+    color: #2b2721;
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    text-align: center;
+    padding: 24px;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #14161a; color: #e8e4dc; }
+    a { color: #7fb2ff; }
+  }
+  p { margin: 0; }
+  a { color: #2f5fbf; }
+  .small { margin-top: 8px; font-size: 14px; opacity: .7; }
+</style>
+</head>
+<body>
+  <main>
+    <p>Opening Monidoro&hellip;</p>
+    <p class="small">If nothing happens, <a href="monidoro.html">open the timer</a>.</p>
+  </main>
+  <script>location.replace("monidoro.html");</script>
+</body>
+</html>
