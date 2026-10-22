@@ -26,6 +26,12 @@ no dependencies, no network. Designed to be opened by double-click from
   <http://127.0.0.1:8777/monidoro.html>
 - Or, without installing anything: <https://monish-m-s.github.io/Monidoro/>
 
+The published copy is installable as a desktop app (a PWA): Edge or Chrome
+offers **Install this site as an app**, which gives it its own window, a Start
+-menu entry and an offline copy. That is `manifest.webmanifest` plus `sw.js` and
+nothing else — no Electron, no packaging step, no `node_modules`. The installed
+app and the tab share one origin, so they share one history.
+
 GitHub Pages serves the repo's `main` branch. There is an `index.html` whose only
 job is to hand the bare address over to `monidoro.html`, because the app's file
 has a name and Pages does not guess one — without it, `/Monidoro/` was a 404
@@ -174,6 +180,13 @@ and pushed.
   a green squircle on paper white, so the stand-in versions put the corner pixels
   on the artwork's own green and round the corners to match — otherwise the white
   paper shows as four bright spots on a dark tab strip
+- Installable as a desktop app: a manifest, a 192 and a maskable 512 icon, and a
+  service worker, which is the whole of what an installed copy needs. The worker
+  keeps the page and its icons for offline use and is deliberately **not**
+  cache-first: a deploy is a push to `main`, so a cached page that never checks
+  the network is a version nobody can update. The recordings are left out of the
+  cache on purpose (see gotcha 35), which lands them where a missing file always
+  lands: the app's own synthesised music
 - A task list, in a dialog of its own and in the app's own idiom rather than
   Notion's: type a name, press Enter, type the next. Each task is a checkbox, an
   editable name, an optional estimate of how many focus sessions it should take
@@ -804,6 +817,22 @@ by accident:
     every size, which is the honest answer: an illustration that reads at 512 and
     not at 16 is still the same logo, and Chrome's tab strip is one place it is
     allowed to look like a picture rather than a glyph.
+
+35. **"Offline" can be a blank page, because a failed navigation does not always
+    reject.** The service worker's first cut was the obvious one: `fetch()` the
+    page, cache it, and on failure fall back to the cache. With the server
+    actually stopped, the reload came back as an *empty document* — a fetch in a
+    worker can resolve with a synthetic non-ok response (measured: `status 502`,
+    body length 0) instead of rejecting, so the `.catch()` never ran, and the
+    branch cached that 502 over the good copy on the way out. Two rules came
+    from it: only a `response.ok` may replace the shell, and the shell is stored
+    under one canonical key (`./monidoro.html`) rather than under the URL that
+    happened to be requested, so a `?cb=` on a test URL cannot sidestep the
+    fallback. The test that finds this is the only honest one — stop the server,
+    then reload, and assert on the rendered `#time`, not on the worker's state.
+    A second detail worth keeping: the first load of a page is *not* controlled
+    by the worker that is installing (it claims afterwards), so the precache list
+    is what makes offline work on the very first visit, not the fetch handler.
 
 ## How features were verified
 

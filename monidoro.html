@@ -12,6 +12,13 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Installable: the manifest is what turns "a page" into an app with its own
+     window and Start-menu entry on Windows, Android and macOS. Everything it
+     names is optional to running the page. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Monidoro">
 <meta name="theme-color" content="#517d59">
 <!-- Absolute, because a preview scraper does not resolve a relative og:image.
      It points at the published copy, which is the only place a link is ever
@@ -1815,6 +1822,17 @@
   }
   el.mark.addEventListener("error", hideMissingMark);
   hideMissingMark();
+
+  // Installed, the app is opened by the browser's own shell with no address
+  // bar, and the worker below is what lets it open with no network at all.
+  // file:// has no service-worker scope, so a copy on disk simply skips this
+  // and is exactly the app it always was.
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register("sw.js").catch(() => {
+      // No worker is not an error worth telling anyone about: the page is
+      // already running, it just will not start offline.
+    });
+  }
 
   function format(seconds) {
     const m = String(Math.floor(seconds / 60)).padStart(2, "0");

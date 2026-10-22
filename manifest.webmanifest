@@ -1,0 +1,28 @@
+{
+  "name": "Monidoro",
+  "short_name": "Monidoro",
+  "description": "A pomodoro timer that counts your sessions into real tasks, grows a plant while you focus, and remembers where the time went.",
+  "start_url": "./monidoro.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#141310",
+  "theme_color": "#517d59",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

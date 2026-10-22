@@ -36,6 +36,31 @@ Your own music is read from beside the page as `focus-music-1.ogg`,
 cut from it, and they are optional too: with none of them present the app is
 unchanged, only without a tab icon.
 
+## Installing it as a desktop app
+
+The published copy is a PWA, so Windows, macOS, Linux and Android can install it
+with its own window and its own Start-menu or dock entry — offline included.
+Nothing is downloaded from a store and nothing needs a build:
+
+- **Edge / Chrome on Windows:** open
+  <https://monish-m-s.github.io/Monidoro/>, then either click the install glyph
+  in the address bar, or **⋯ → Apps → Install this site as an app** (Chrome calls
+  it *Cast, save and share → Install page as app*). It lands in the Start menu
+  and can be pinned to the taskbar.
+- **Safari on iOS / macOS:** Share → *Add to Home Screen* / *Add to Dock*.
+- **Chrome on Android:** ⋮ → *Add to Home screen* → *Install*.
+
+Installing adds `manifest.webmanifest` and `sw.js` to what the app already is.
+The worker caches the page and its icons so the installed copy opens with no
+network at all. Media requests are passed straight through (they stream as byte
+ranges, and a cached partial response breaks playback), so offline the
+recordings step aside to the app's own synthesised music — the same fallback a
+missing file already gets.
+
+If you would rather not install anything, `python -m http.server 8777` and a
+browser tab are still all it takes, and double-clicking `monidoro.html` still
+works with no server at all.
+
 ## Notes
 
 `NOTES.md` is the full working handoff: storage shapes, the gotchas that cost
