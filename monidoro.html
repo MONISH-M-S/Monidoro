@@ -4,6 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Monidoro</title>
+<meta name="description" content="A pomodoro timer that counts your sessions into real tasks, grows a plant while you focus, and remembers where the time went.">
+<!-- The icons are companion files, like the recordings: with them missing (a
+     copy of monidoro.html on its own, opened from file://) the app is exactly
+     what it was, just without a tab icon. Nothing here is required to run. -->
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#517d59">
+<!-- Absolute, because a preview scraper does not resolve a relative og:image.
+     It points at the published copy, which is the only place a link is ever
+     unfurled from; opening the file from disk leaves these ignored. -->
+<meta property="og:title" content="Monidoro">
+<meta property="og:description" content="A pomodoro timer that counts your sessions into real tasks, grows a plant while you focus, and remembers where the time went.">
+<meta property="og:image" content="https://monish-m-s.github.io/Monidoro/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root{
     /* These are as dark as the contrast pass needed them, not as they first
@@ -69,6 +85,14 @@
     margin:0 0 30px; font-size:.78rem; font-weight:600;
     letter-spacing:.18em; text-transform:uppercase; color:var(--mut);
   }
+  /* The mark is the artwork's own squircle, so it needs no border-radius here -
+     its corners are transparent already. Hidden when the companion file is
+     missing; see the error handler in the script. */
+  .mark{
+    width:30px; height:30px; margin-right:9px; vertical-align:-9px;
+    display:inline-block;
+  }
+  .mark[hidden]{display:none}
   .greeting{margin:-16px 0 22px; font-size:.95rem; font-weight:600}
   .greeting[hidden]{display:none}
   /* Was white on --warn, which measured 3.25:1 in the light theme and 2:1 in the
@@ -718,7 +742,7 @@
 </head>
 <body>
 <main>
-  <h1>Monidoro</h1>
+  <h1><img class="mark" id="mark" src="mark-64.png" alt="" width="30" height="30">Monidoro</h1>
   <p class="badge" id="badge" hidden>test mode</p>
   <p class="greeting" id="greeting" hidden></p>
 
@@ -1690,6 +1714,7 @@
   let sessionTag = settings.activeTag;
 
   const el = {
+    mark: document.getElementById("mark"),
     time: document.getElementById("time"),
     mode: document.getElementById("mode"),
     ring: document.getElementById("ring"),
@@ -1778,6 +1803,17 @@
 
   el.ring.style.strokeDasharray = RING_LENGTH;
   el.badge.hidden = !TEST_MODE;
+
+  // The mark is a companion file, so it can be missing - a copy of the HTML
+  // opened on its own from file://. An <img> that never loaded paints a broken
+  // glyph next to the wordmark, so it takes itself away instead. Checked as
+  // well as listened for: the tag is parsed long before this script runs, so
+  // the error has usually already happened by the time a listener could hear it.
+  function hideMissingMark() {
+    if (el.mark.complete && !el.mark.naturalWidth) el.mark.hidden = true;
+  }
+  el.mark.addEventListener("error", hideMissingMark);
+  hideMissingMark();
 
   function format(seconds) {
     const m = String(Math.floor(seconds / 60)).padStart(2, "0");

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Monidoro: a badger holding a tomato-shaped timer" width="180">
+</p>
+
 # Monidoro
 
 A single-file pomodoro timer. `monidoro.html` is the entire app — no build step,
@@ -24,6 +28,13 @@ a file missing, that choice falls back to the app's own synthesised melody.
 
 Your own music is read from beside the page as `focus-music-1.ogg`,
 `focus-music-2.ogg`, and on (`.mp3`, `.m4a` and `.wav` accepted too).
+
+## The icon files
+
+`logo.png` is the source drawing. The tab icon (`favicon.ico`,
+`favicon-32.png`), the iOS touch icon and the 30 px mark beside the wordmark are
+cut from it, and they are optional too: with none of them present the app is
+unchanged, only without a tab icon.
 
 ## Notes
 

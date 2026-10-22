@@ -43,6 +43,16 @@ recordings. All three are strictly optional — with a file missing, that choice
 falls back to the app's own synthesised melody, so a copy of the HTML on its own
 still makes every sound it ever did.
 
+The identity is also optional companion files: **`favicon.ico`**,
+**`favicon-32.png`**, **`apple-touch-icon.png`** and **`mark-64.png`** (the
+squircle beside the wordmark), all cut from **`logo.png`** — the badger holding
+a tomato timer, 1024 square. `icon-512.png` and `og.png` are for the published
+copy only. With them missing, the page is exactly what it was: no tab icon, and
+the mark beside the wordmark removes itself rather than showing a broken image
+(see gotcha 34). There is no build step — these PNGs are committed as they are,
+and `logo.png` is the source they were all cut from. `mark-64.png` is 64 px so a
+30 px mark stays crisp on a 2x screen.
+
 Music of your own is read from beside the page rather than uploaded:
 `focus-music-1.ogg`, then `focus-music-2.ogg` and on for a playlist (`.mp3`,
 `.m4a` and `.wav` are accepted too). Nothing is needed for the app to work —
@@ -156,6 +166,14 @@ and pushed.
 - Confetti falls for a finished focus session: DOM nodes animated by one CSS
   keyframe, and one timer takes them away. Nothing falls if the system asks for
   reduced motion, where the flower opening is the celebration on its own
+- A logo: the badger holding a tomato timer, drawn once at 1024 px and cut into
+  the tab icon, the iOS touch icon, the mark beside the wordmark and the Open
+  Graph card. The tab icon is the **whole** picture rather than a crop of it:
+  cropping to the tomato left a green field with half a paw in it, and the
+  badger's head alone was a second drawing rather than this one. The artwork is
+  a green squircle on paper white, so the stand-in versions put the corner pixels
+  on the artwork's own green and round the corners to match — otherwise the white
+  paper shows as four bright spots on a dark tab strip
 - A task list, in a dialog of its own and in the app's own idiom rather than
   Notion's: type a name, press Enter, type the next. Each task is a checkbox, an
   editable name, an optional estimate of how many focus sessions it should take
@@ -770,6 +788,22 @@ by accident:
     Hand focus to the arrow that can still be used, on the click path and on the
     Alt-arrow path both. Assert on `document.activeElement`, not only on the new
     order.
+
+34. **A companion image that fails must take itself away, and a crop is not the
+    picture.** Two things the logo cost. (a) The mark beside the wordmark is an
+    `<img>` whose file is optional, and a missing one paints the browser's broken
+    -image glyph next to the name. An `error` listener alone is not enough: the
+    tag is parsed long before the script at the end of the body runs, so the
+    error has already happened and the listener never hears it. Check
+    `complete && !naturalWidth` on load *and* listen for the event. `hidden` then
+    needs its own `.mark[hidden]{display:none}`, because `.mark` sets a `display`
+    of its own (gotcha 18). (b) The tempting small icon — crop the tomato out of
+    the artwork — is not a simplification, it is a piece of a picture with its
+    context removed: the paws holding it are sliced in half and the background
+    becomes an anonymous green field. The owner asked for the whole artwork at
+    every size, which is the honest answer: an illustration that reads at 512 and
+    not at 16 is still the same logo, and Chrome's tab strip is one place it is
+    allowed to look like a picture rather than a glyph.
 
 ## How features were verified
 
